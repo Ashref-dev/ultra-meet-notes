@@ -1,0 +1,117 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+tmp/
+/experiments
+
+# dependencies
+/node_modules
+**/models
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+*.mp4
+
+# testing
+/coverage
+/dist
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# Audio files
+*.wav
+
+# Large media files
+docs/demo.mov
+docs/demo.gif
+
+
+meeting_minutes.db
+
+# Added by Task Master AI
+# Logs
+logs
+*.log
+dev-debug.log
+# Dependency directories
+node_modules/
+# Environment variables
+.env
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+experiments/
+.cursor/
+target/
+
+frontend/src-tauri/binaries/
+Cargo.lock
+
+# Windows build artifacts
+vs_buildtools.exe
+*.exe
+
+# External/vendored clones (submodule replaced by manual clone - see README)
+backend/whisper.cpp/
+backend/venv/
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.db
+backend/*.db-journal
+backend/*.log
+
+# Build artifacts
+frontend/src-tauri/target/
+frontend/src-tauri/gen/
+frontend/.next/
+frontend/out/
+frontend/dist/
+frontend/node_modules/
+
+# Model caches / downloaded assets
+**/models/
+whisper-server-package/models/
+
+# macOS / IDE
+.idea/
+.vscode/
+*.swp
+
+# Session / scratch
+.sisyphus/
+.opencode/
+.playwright-mcp/

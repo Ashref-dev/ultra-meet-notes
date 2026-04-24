@@ -1,0 +1,210 @@
+name: "Build macOS with Qwen3-ASR"
+
+on:
+  workflow_dispatch:
+    inputs:
+      build-type:
+        description: 'Build type'
+        required: true
+        type: choice
+        options:
+          - release
+          - debug
+        default: release
+      sign-build:
+        description: 'Sign the build'
+        required: true
+        type: boolean
+        default: false
+      upload-artifacts:
+        description: 'Upload build artifacts'
+        required: true
+        type: boolean
+        default: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-macos-qwen-asr:
+    name: Build macOS (Apple Silicon + Qwen3-ASR)
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tauri.conf.json
+        id: get-version
+        shell: bash
+        run: |
+          VERSION=$(grep -o '"version": "[^"]*"' frontend/src-tauri/tauri.conf.json | cut -d'"' -f4)
+          echo "Application version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Determine build profile
+        id: build-profile
+        shell: bash
+        run: |
+          if [[ "${{ github.event.inputs.build-type }}" == "debug" ]]; then
+            echo "profile=debug" >> "$GITHUB_OUTPUT"
+            echo "args=--debug" >> "$GITHUB_OUTPUT"
+          else
+            echo "profile=release" >> "$GITHUB_OUTPUT"
+            echo "args=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Clone qwen3-asr.cpp vendor library
+        run: |
+          cd frontend/src-tauri/qwen3-asr-sys/vendor
+          git clone --recursive https://github.com/predict-woo/qwen3-asr.cpp
+          echo "Vendor library cloned with GGML submodule"
+          ls -la qwen3-asr.cpp/
+          ls -la qwen3-asr.cpp/ggml/
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+          key: macos-qwen-asr-aarch64
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          pnpm install
+
+      - name: Import Apple Developer Certificate
+        if: ${{ github.event.inputs.sign-build == 'true' }}
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          security find-identity -v -p codesigning build.keychain
+
+      - name: Verify certificate
+        if: ${{ github.event.inputs.sign-build == 'true' }}
+        run: |
+          CERT_INFO=$(security find-identity -v -p codesigning build.keychain | grep "Developer ID Application")
+          CERT_ID=$(echo "$CERT_INFO" | awk -F'"' '{print $2}')
+          echo "CERT_ID=$CERT_ID" >> $GITHUB_ENV
+          echo "Certificate imported: $CERT_ID"
+
+      - name: Build llama-helper sidecar
+        run: |
+          echo "Building llama-helper sidecar with Metal support..."
+          cargo build --release -p llama-helper --features metal
+
+          mkdir -p frontend/src-tauri/binaries
+          cp target/release/llama-helper frontend/src-tauri/binaries/llama-helper-aarch64-apple-darwin
+
+          echo "Copied llama-helper to frontend/src-tauri/binaries/"
+          ls -la frontend/src-tauri/binaries/
+
+      - name: Build Tauri app with Qwen3-ASR (signed)
+        if: ${{ github.event.inputs.sign-build == 'true' }}
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ env.CERT_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          MEETILY_RSA_PUBLIC_KEY: ${{ secrets.MEETILY_RSA_PUBLIC_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        with:
+          projectPath: frontend
+          args: --target aarch64-apple-darwin --features qwen-asr ${{ steps.build-profile.outputs.args }}
+
+      - name: Build Tauri app with Qwen3-ASR (unsigned, no updater signing)
+        if: ${{ github.event.inputs.sign-build != 'true' }}
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MEETILY_RSA_PUBLIC_KEY: ${{ secrets.MEETILY_RSA_PUBLIC_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        with:
+          projectPath: frontend
+          tauriScript: pnpm tauri
+          args: --target aarch64-apple-darwin --features qwen-asr --config src-tauri/tauri.conf.unsigned.json ${{ steps.build-profile.outputs.args }}
+
+      - name: Verify build artifacts
+        run: |
+          echo "Build artifacts:"
+          find target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle -type f \( -name "*.dmg" -o -name "*.app" -o -name "*.tar.gz" -o -name "*.sig" \) 2>/dev/null || echo "No artifacts found"
+
+      - name: Upload artifacts
+        if: ${{ github.event.inputs.upload-artifacts == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultra-meet-macos-qwen-asr-${{ steps.build-profile.outputs.profile }}-${{ steps.get-version.outputs.version }}
+          path: |
+            target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/dmg/*.dmg
+            target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.app
+            target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.app.tar.gz
+            target/aarch64-apple-darwin/${{ steps.build-profile.outputs.profile }}/bundle/macos/*.app.tar.gz.sig
+          retention-days: 30
+
+      - name: Generate build summary
+        run: |
+          echo "## macOS Build Summary (with Qwen3-ASR)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | ${{ steps.get-version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Build Profile** | ${{ steps.build-profile.outputs.profile }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Target** | aarch64-apple-darwin (Apple Silicon) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Features** | qwen-asr (Qwen3-ASR 0.6B) |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Signed** | ${{ github.event.inputs.sign-build == 'true' && 'Yes' || 'No' }} |" >> $GITHUB_STEP_SUMMARY

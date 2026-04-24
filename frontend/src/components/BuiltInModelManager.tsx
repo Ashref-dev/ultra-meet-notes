@@ -1,0 +1,549 @@
+'use client';
+
+/* eslint-disable */
+/* oxlint-disable */
+
+import { useState, useEffect, useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ConfirmDeleteDialog } from '@/components/shared/ConfirmDeleteDialog';
+import { cn } from '@/lib/utils';
+import { Check, Download, RefreshCw, BadgeAlert, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+
+interface ModelInfo {
+  name: string;
+  display_name: string;
+  status: {
+    type: 'not_downloaded' | 'downloading' | 'available' | 'corrupted' | 'error';
+    progress?: number;
+  };
+  size_mb: number;
+  context_size: number;
+  description: string;
+  gguf_file: string;
+}
+
+interface DownloadProgressInfo {
+  downloadedMb: number;
+  totalMb: number;
+  speedMbps: number;
+}
+
+interface BuiltInModelManagerProps {
+  selectedModel: string;
+  onModelSelect: (model: string) => void;
+}
+
+function formatBuiltInSize(sizeMb: number): string {
+  if (sizeMb >= 1000) {
+    const sizeGb = sizeMb / 1000;
+    return `${sizeGb >= 10 ? sizeGb.toFixed(0) : sizeGb.toFixed(1)} GB`;
+  }
+
+  return `${Math.round(sizeMb)} MB`;
+}
+
+export function BuiltInModelManager({ selectedModel, onModelSelect }: BuiltInModelManagerProps) {
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [hasFetched, setHasFetched] = useState<boolean>(false);
+  const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
+  const [downloadProgressInfo, setDownloadProgressInfo] = useState<Record<string, DownloadProgressInfo>>({});
+  const [downloadingModels, setDownloadingModels] = useState<Set<string>>(new Set());
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; modelId: string | null }>({
+    open: false,
+    modelId: null,
+  });
+
+  const fetchModels = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const data = (await invoke('builtin_ai_list_models')) as ModelInfo[];
+      setModels(data);
+
+      // Auto-select first available model if none selected
+      if (data.length > 0 && !selectedModel) {
+        const firstAvailable = data.find((m) => m.status.type === 'available');
+        if (firstAvailable) {
+          onModelSelect(firstAvailable.name);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch built-in AI models:', error);
+      toast.error('Failed to load models');
+    } finally {
+      setIsLoading(false);
+      setHasFetched(true);
+    }
+  }, [onModelSelect, selectedModel]);
+
+  useEffect(() => {
+    fetchModels();
+  }, [fetchModels]);
+
+  // Listen for download progress events
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    const setupListener = async () => {
+      unlisten = await listen('builtin-ai-download-progress', (event: any) => {
+        const { model, progress, downloaded_mb, total_mb, speed_mbps, status } = event.payload;
+
+        // Update percentage progress
+        setDownloadProgress((prev) => ({
+          ...prev,
+          [model]: progress,
+        }));
+
+        // Update detailed progress info (MB, speed)
+        setDownloadProgressInfo((prev) => ({
+          ...prev,
+          [model]: {
+            downloadedMb: downloaded_mb ?? 0,
+            totalMb: total_mb ?? 0,
+            speedMbps: speed_mbps ?? 0,
+          },
+        }));
+
+        // Handle downloading status - restore downloadingModels state on modal reopen
+        if (status === 'downloading') {
+          setDownloadingModels((prev) => {
+            if (!prev.has(model)) {
+              const newSet = new Set(prev);
+              newSet.add(model);
+              return newSet;
+            }
+            return prev;
+          });
+        }
+
+        // Handle completed status
+        if (status === 'completed') {
+          setDownloadingModels((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(model);
+            return newSet;
+          });
+          // Clean up progress state
+          setDownloadProgress((prev) => {
+            const { [model]: _, ...rest } = prev;
+            return rest;
+          });
+          setDownloadProgressInfo((prev) => {
+            const { [model]: _, ...rest } = prev;
+            return rest;
+          });
+          // Refresh models list
+          fetchModels();
+          toast.success(`Model ${model} downloaded successfully`);
+        }
+
+        // Handle cancelled status
+        if (status === 'cancelled') {
+          setDownloadingModels((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(model);
+            return newSet;
+          });
+          // Clean up progress state
+          setDownloadProgress((prev) => {
+            const { [model]: _, ...rest } = prev;
+            return rest;
+          });
+          setDownloadProgressInfo((prev) => {
+            const { [model]: _, ...rest } = prev;
+            return rest;
+          });
+          // Refresh models list
+          fetchModels();
+        }
+
+        // Handle error status
+        if (status === 'error') {
+          setDownloadingModels((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(model);
+            return newSet;
+          });
+          // Clean up progress state
+          setDownloadProgress((prev) => {
+            const { [model]: _, ...rest } = prev;
+            return rest;
+          });
+          setDownloadProgressInfo((prev) => {
+            const { [model]: _, ...rest } = prev;
+            return rest;
+          });
+
+          // Update model status to error locally instead of fetching from backend
+          // Backend doesn't persist error status, so fetchModels() would return not_downloaded
+          setModels((prevModels) =>
+            prevModels.map((m) =>
+              m.name === model
+                ? {
+                    ...m,
+                    status: {
+                      type: 'error',
+                      progress: 0,
+                    } as any,
+                  }
+                : m
+            )
+          );
+
+          // Don't show error toast here - DownloadProgressToast already handles it
+          // Don't call fetchModels() - it would overwrite error status with not_downloaded
+        }
+      });
+    };
+
+    setupListener();
+
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [fetchModels]);
+
+  const downloadModel = async (modelName: string) => {
+    try {
+      // Optimistically add to downloadingModels for immediate UI feedback
+      setDownloadingModels((prev) => new Set([...prev, modelName]));
+
+      await invoke('builtin_ai_download_model', { modelName });
+    } catch (error) {
+      console.error('Failed to download model:', error);
+
+      // Check if this is a cancellation error (starts with "CANCELLED:")
+      const errorMsg = String(error);
+      if (errorMsg.startsWith('CANCELLED:')) {
+        // Cancel handler already removed from downloadingModels
+        // Don't show error toast for cancellations - cancel function already shows info toast
+        return;
+      }
+
+      // For real errors, show toast and remove from downloading
+      toast.error(`Failed to download ${modelName}`);
+
+      setDownloadingModels((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(modelName);
+        return newSet;
+      });
+
+      // Refresh model list to get updated Error status from backend
+      fetchModels();
+    }
+  };
+
+  const cancelDownload = async (modelName: string) => {
+    try {
+      await invoke('builtin_ai_cancel_download', { modelName });
+      toast.info(`Download of ${modelName} cancelled`);
+      setDownloadingModels((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(modelName);
+        return newSet;
+      });
+    } catch (error) {
+      console.error('Failed to cancel download:', error);
+    }
+  };
+
+  const deleteModel = async (modelName: string) => {
+    try {
+      await invoke('builtin_ai_delete_model', { modelName });
+      toast.success(`Model ${modelName} deleted`);
+      fetchModels();
+    } catch (error) {
+      console.error('Failed to delete model:', error);
+      toast.error(`Failed to delete ${modelName}`);
+    }
+  };
+
+  // Don't show loading spinner if we have downloads in progress - show the model list instead
+  if (isLoading && downloadingModels.size === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        <RefreshCw className="mx-auto h-8 w-8 animate-spin mb-2" />
+        Loading models...
+      </div>
+    );
+  }
+
+  // Only show "no models" message after fetch has completed
+  if (hasFetched && models.length === 0) {
+    return (
+      <Alert>
+        <AlertDescription>
+          No models found. Download a model to get started with Built-in AI.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <h4 className="text-sm font-bold">Built-in AI Models</h4>
+      </div>
+
+      <div className="grid gap-4">
+        {models.map((model) => {
+          const progress = downloadProgress[model.name];
+          const progressInfo = downloadProgressInfo[model.name];
+          const modelIsDownloading = downloadingModels.has(model.name);
+          const isAvailable = model.status.type === 'available';
+          const isNotDownloaded = model.status.type === 'not_downloaded';
+          const isCorrupted = model.status.type === 'corrupted';
+          const isError = model.status.type === 'error';
+
+          return (
+            // biome-ignore lint/a11y/noStaticElementInteractions: non-button wrapper preserves nested action buttons while keeping row selection keyboard-accessible
+            <div
+              key={model.name}
+              role={isAvailable && !modelIsDownloading ? 'button' : undefined}
+              tabIndex={isAvailable && !modelIsDownloading ? 0 : -1}
+              onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === ' ') && isAvailable && !modelIsDownloading) {
+                  e.preventDefault();
+                  onModelSelect(model.name);
+                }
+              }}
+              onClick={() => {
+                if (isAvailable && !modelIsDownloading) {
+                  onModelSelect(model.name);
+                }
+              }}
+              className={cn(
+                'w-full rounded-xl border border-border bg-card p-3 text-left transition-colors duration-200 disabled:cursor-default',
+                selectedModel === model.name
+                  ? 'border-ring bg-muted/60 ring-1 ring-ring/30'
+                  : 'hover:border-foreground/20 hover:bg-muted/30',
+                modelIsDownloading && 'bg-muted/30',
+                isAvailable && !modelIsDownloading && 'cursor-pointer'
+              )}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-sm font-semibold text-foreground">{model.display_name || model.name}</span>
+                    {selectedModel === model.name && isAvailable && (
+                      <span className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-foreground">
+                        <Check className="h-3 w-3" />
+                        Selected
+                      </span>
+                    )}
+                    {isCorrupted && (
+                      <span className="inline-flex items-center gap-1 rounded-md border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
+                        <BadgeAlert className="h-3 w-3" />
+                        Corrupted
+                      </span>
+                    )}
+                    {isError && (
+                      <span className="rounded-md border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
+                        Error
+                      </span>
+                    )}
+                    {isNotDownloaded && !modelIsDownloading && (
+                      <span className="text-[11px] font-medium text-muted-foreground">
+                        Not downloaded
+                      </span>
+                    )}
+                  </div>
+                  {model.description && (
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{model.description}</p>
+                  )}
+                  {(isError || isCorrupted) && (
+                    <p className="mt-1 text-[11px] text-destructive">
+                      {isError && typeof model.status === 'object' && 'Error' in model.status
+                        ? (model.status as any).Error
+                        : isCorrupted
+                        ? 'File is corrupted. Retry download or delete.'
+                        : 'An error occurred'}
+                    </p>
+                  )}
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                    <span>{model.context_size} tokens</span>
+                    {progressInfo?.speedMbps > 0 && modelIsDownloading && (
+                      <span>{progressInfo.speedMbps.toFixed(1)} MB/s</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="ml-0 flex flex-wrap items-center gap-2 sm:ml-4 sm:justify-end">
+                  <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-foreground">
+                    {formatBuiltInSize(model.size_mb)}
+                  </span>
+
+                  {isAvailable && selectedModel !== model.name && !modelIsDownloading && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onModelSelect(model.name);
+                      }}
+                    >
+                      Use model
+                    </Button>
+                  )}
+
+                  {isAvailable && selectedModel === model.name && !modelIsDownloading && (
+                    <span className="text-xs font-medium text-muted-foreground">Ready</span>
+                  )}
+
+                  {/* Not Downloaded - Show Download button */}
+                  {isNotDownloaded && !modelIsDownloading && (
+                    <Button
+                      variant="blue"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        downloadModel(model.name);
+                      }}
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Download
+                    </Button>
+                  )}
+
+                  {/* Downloading - Show Cancel button */}
+                  {modelIsDownloading && (
+                    <Button
+                      variant="gray"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        cancelDownload(model.name);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  )}
+
+                  {/* Error - Show Retry button */}
+                  {isError && !modelIsDownloading && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        downloadModel(model.name);
+                      }}
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Retry
+                    </Button>
+                  )}
+
+                  {/* Corrupted - Show both Retry and Delete buttons */}
+                  {isCorrupted && !modelIsDownloading && (
+                    <>
+                      <Button
+                        variant="blue"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          downloadModel(model.name);
+                        }}
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Retry
+                      </Button>
+                          <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteConfirm({ open: true, modelId: model.name });
+                        }}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </Button>
+                    </>
+                  )}
+
+                  {/* Available - Show small trash icon (only if not currently selected) */}
+                  {isAvailable && !modelIsDownloading && selectedModel !== model.name && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteConfirm({ open: true, modelId: model.name });
+                      }}
+                      title={`Delete ${model.display_name || model.name}`}
+                      aria-label={`Delete ${model.display_name || model.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Download progress bar */}
+              {modelIsDownloading && progress !== undefined && (
+                <div className="mt-3 border-t border-border pt-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-foreground">Downloading</span>
+                    <span className="text-sm font-semibold text-foreground">
+                      {Math.round(progress)}%
+                    </span>
+                  </div>
+                  <div className="mb-2 text-sm text-muted-foreground">
+                    {progressInfo?.totalMb > 0 ? (
+                      <>
+                        {progressInfo.downloadedMb.toFixed(1)} MB / {progressInfo.totalMb.toFixed(1)} MB
+                        {progressInfo.speedMbps > 0 && (
+                          <span className="ml-2 text-muted-foreground">
+                            ({progressInfo.speedMbps.toFixed(1)} MB/s)
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                        <span>{model.size_mb} MB</span>
+                      )}
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-lg bg-muted">
+                    <div
+                      className="h-full rounded-lg bg-accent transition-all duration-500 ease-in-out"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <ConfirmDeleteDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) =>
+          setDeleteConfirm({
+            open,
+            modelId: open ? deleteConfirm.modelId : null,
+          })
+        }
+        title="Delete model"
+        description="This model will need to be re-downloaded if you need it again."
+        confirmLabel="Delete"
+        onConfirm={async () => {
+          if (!deleteConfirm.modelId) {
+            return;
+          }
+
+          await deleteModel(deleteConfirm.modelId);
+          setDeleteConfirm({ open: false, modelId: null });
+        }}
+      />
+    </div>
+  );
+}

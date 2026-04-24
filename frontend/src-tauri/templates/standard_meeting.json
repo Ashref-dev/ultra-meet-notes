@@ -1,0 +1,32 @@
+{
+  "name": "Standard Meeting Notes",
+  "description": "A professional general-purpose template with a clear TL;DR, decisions, owners, and next steps.",
+  "sections": [
+    {
+      "title": "TL;DR",
+      "instruction": "Write a concise 2-4 bullet executive summary covering the most important outcomes, risks, or follow-ups from the meeting.",
+      "format": "list"
+    },
+    {
+      "title": "Key Decisions",
+      "instruction": "List the final decisions that were actually made. Use one bullet per decision and avoid tentative discussion points.",
+      "format": "list"
+    },
+    {
+      "title": "Action Items",
+      "instruction": "List the follow-up tasks agreed in the meeting. Every item must include an owner if one was mentioned, the task, and due date or timing if available.",
+      "format": "list",
+      "item_format": "- **Owner:** [Name or Team] — **Action:** [Task] — **Due:** [Date or TBD]"
+    },
+    {
+      "title": "Discussion Topics",
+      "instruction": "Summarize the major topics discussed, the context behind them, and any notable tradeoffs or open questions raised.",
+      "format": "paragraph"
+    },
+    {
+      "title": "Next Steps",
+      "instruction": "Capture the immediate next milestones, check-ins, or dependencies that should happen after this meeting.",
+      "format": "list"
+    }
+  ]
+}
