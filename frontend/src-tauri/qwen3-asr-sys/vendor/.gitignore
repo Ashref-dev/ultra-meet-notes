@@ -1,0 +1,2 @@
+# Vendor library cloned at build time (see CI workflow)
+qwen3-asr.cpp/

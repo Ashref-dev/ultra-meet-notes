@@ -1,0 +1,18 @@
+[package]
+name = "qwen3-asr-sys"
+version = "0.1.0"
+edition = "2021"
+description = "FFI bindings for qwen3-asr.cpp (GGML-based Qwen3 ASR)"
+publish = false
+
+[features]
+default = ["cpu"]
+cpu = []
+metal = []
+cuda = []
+
+[build-dependencies]
+cc = "1.0"
+cmake = "0.1"
+
+[dependencies]

@@ -1,0 +1,22 @@
+{
+  "name": "Detailed Discussion Notes",
+  "description": "Comprehensive notes organized by discussion topics with key points, technical details, and action items with checkboxes.",
+  "sections": [
+    {
+      "title": "Overview",
+      "instruction": "Provide a brief overview summarizing the core topic and objective of the discussion in 3-5 bullet points. Each bullet should capture one high-level takeaway.",
+      "format": "list"
+    },
+    {
+      "title": "Detailed Discussion by Topic",
+      "instruction": "Break down the discussion into logical topics. For each topic, create a ### subheading and list the key points as bullet items. Preserve technical details, specific numbers, parameters, and concrete examples mentioned. Use sub-bullets for supporting details. Organize topics in the order they were discussed. Typically 3-6 topics depending on the meeting length.",
+      "format": "paragraph"
+    },
+    {
+      "title": "Action Items",
+      "instruction": "List all action items, tasks, and next steps mentioned. Each item should be a checkbox (- [ ]) with the responsible person if mentioned. Include concrete deliverables and any deadlines or conditions discussed.",
+      "format": "list",
+      "item_format": "- [ ] [Owner (if known)] Action description"
+    }
+  ]
+}
