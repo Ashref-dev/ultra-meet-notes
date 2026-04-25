@@ -2,10 +2,10 @@ use log::{debug as log_debug, error as log_error, info as log_info, warn as log_
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::{AppHandle, Runtime};
-use tauri::Emitter;
 use tauri_plugin_store::StoreExt;
 
 use crate::{
+    audio::transcription::WordTimestamp,
     database::{
         models::MeetingModel,
         repositories::{
@@ -37,20 +37,6 @@ pub struct Meeting {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SearchRequest {
     pub query: String,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Serialize)]
-struct DiarizationModelDownloadProgress {
-    percent: f32,
-    stage: String,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Deserialize)]
-struct DiarizationDownloadResponse {
-    status: String,
-    message: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -154,6 +140,8 @@ pub struct MeetingTranscript {
     pub duration: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub speaker: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub words: Option<Vec<WordTimestamp>>,
 }
 
 /// Meeting metadata without transcripts (for pagination)
@@ -206,6 +194,8 @@ pub struct TranscriptSegment {
     pub duration: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speaker: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub words: Option<Vec<WordTimestamp>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -332,49 +322,6 @@ async fn make_api_request<R: Runtime, T: for<'de> Deserialize<'de>>(
         log_error!("{}", error_msg);
         error_msg
     })
-}
-
-#[allow(dead_code)]
-fn map_diarization_download_error(message: &str) -> String {
-    let lower = message.to_lowercase();
-
-    if lower.contains("hf token missing") || lower.contains("hf_token") {
-        return "HF token missing. Save your HuggingFace token first.".to_string();
-    }
-
-    if lower.contains("401") || lower.contains("403") || lower.contains("unauthorized") {
-        return "Model terms not accepted: visit https://huggingface.co/pyannote/speaker-diarization-community-1 and accept the access request, then try again.".to_string();
-    }
-
-    if lower.contains("timed out") || lower.contains("dns") || lower.contains("connection") {
-        return format!("Network error: {}", message);
-    }
-
-    if lower.contains("failed to connect to backend") {
-        return format!("Network error: {}", message);
-    }
-
-    format!("Could not download the diarization model: {}", message)
-}
-
-#[allow(dead_code)]
-async fn emit_diarization_download_progress<R: Runtime>(
-    app: &AppHandle<R>,
-    percent: f32,
-    stage: &str,
-) {
-    let _ = app.emit(
-        "diarization-model-download-progress",
-        DiarizationModelDownloadProgress {
-            percent,
-            stage: stage.to_string(),
-        },
-    );
-}
-
-#[tauri::command]
-pub async fn download_diarization_model<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
-    crate::diarization::commands::download_diarization_models(app).await
 }
 
 // API Commands for Tauri
@@ -940,6 +887,7 @@ pub async fn api_get_meeting_transcripts<R: Runtime>(
                     audio_end_time: t.audio_end_time,
                     duration: t.duration,
                     speaker: t.speaker,
+                    words: t.words,
                 })
                 .collect::<Vec<_>>();
 

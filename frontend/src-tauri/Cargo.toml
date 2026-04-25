@@ -102,14 +102,11 @@ nnnoiseless = "0.5"
 # NOTE: whisper-rs is declared in platform-specific sections below (macOS/Windows/Linux)
 # to ensure correct GPU features are enabled per platform
 futures-util = "0.3"
-silero_rs = { git = "https://github.com/emotechlab/silero-rs", rev = "26a6460", package = "silero" }
 
 # Parakeet (ONNX-based fast transcription) dependencies
 ort = { version = "2.0.0-rc.10" }  # ONNX Runtime for Parakeet models
 thiserror = "2.0.16"                # Error handling for Parakeet
 
-# Speaker diarization (sherpa-onnx wrapper) - runs segmentation + embedding locally
-sherpa-rs = { version = "0.6.8", default-features = false }
 sha2 = "0.10"
 
 # Qwen3-ASR (GGML-based multilingual ASR) - optional

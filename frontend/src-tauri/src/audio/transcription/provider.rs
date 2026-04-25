@@ -5,6 +5,13 @@
 
 use async_trait::async_trait;
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct WordTimestamp {
+    pub word: String,
+    pub start: f32,
+    pub end: f32,
+}
+
 // ============================================================================
 // TRANSCRIPTION PROVIDER TRAIT & ERROR TYPES
 // ============================================================================
@@ -43,6 +50,7 @@ pub struct TranscriptResult {
     pub text: String,
     pub confidence: Option<f32>, // None if provider doesn't support confidence scores
     pub is_partial: bool,
+    pub words: Option<Vec<WordTimestamp>>,
 }
 
 /// Trait for transcription providers (Whisper, Parakeet, future providers)

@@ -17,7 +17,7 @@ pub use engine::{
 };
 pub use openai_provider::OpenAIProvider;
 pub use parakeet_provider::ParakeetProvider;
-pub use provider::{TranscriptResult, TranscriptionError, TranscriptionProvider};
+pub use provider::{TranscriptResult, TranscriptionError, TranscriptionProvider, WordTimestamp};
 pub use qwen_asr_provider::QwenAsrProvider;
 pub use whisper_provider::WhisperProvider;
 pub use worker::{reset_speech_detected_flag, start_transcription_task, TranscriptUpdate};

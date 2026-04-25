@@ -86,12 +86,10 @@ export function useCopyOperations({
     const header = `# Transcript of the Meeting: ${meeting.id} - ${meetingTitle ?? meeting.title}\n\n`;
     const formattedMeetingDate = formatMeetingDateTime(meeting.created_at);
     const date = formattedMeetingDate ? `## Date: ${formattedMeetingDate}\n\n` : '';
-    const hasSpeakers = allTranscripts.some(t => t.speaker);
     const fullTranscript = allTranscripts
       .map(t => {
         const time = formatTime(t.audio_start_time, t.timestamp);
-        const speaker = t.speaker ? `**${t.speaker}:** ` : (hasSpeakers ? '**Unknown:** ' : '');
-        return `${time} ${speaker}${t.text}  `;
+        return `${time} ${t.text}  `;
       })
       .join('\n');
 

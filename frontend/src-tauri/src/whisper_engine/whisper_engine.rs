@@ -11,6 +11,7 @@ use reqwest::Client;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use crate::config::WHISPER_MODEL_CATALOG;
+use crate::audio::transcription::WordTimestamp;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ModelStatus {
@@ -30,6 +31,14 @@ pub struct ModelInfo {
     pub speed: String,
     pub status: ModelStatus,
     pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WhisperTranscriptionResult {
+    pub text: String,
+    pub confidence: f32,
+    pub is_partial: bool,
+    pub words: Option<Vec<WordTimestamp>>,
 }
 
 pub struct WhisperEngine {
@@ -576,9 +585,20 @@ impl WhisperEngine {
 
         repeated_words as f32 / total_words
     }
-    
+
     /// Transcribe audio with streaming support for partial results and adaptive quality
     pub async fn transcribe_audio_with_confidence(&self, audio_data: Vec<f32>, language: Option<String>) -> Result<(String, f32, bool)> {
+        let result = self
+            .transcribe_audio_with_confidence_and_words(audio_data, language)
+            .await?;
+        Ok((result.text, result.confidence, result.is_partial))
+    }
+
+    pub async fn transcribe_audio_with_confidence_and_words(
+        &self,
+        audio_data: Vec<f32>,
+        language: Option<String>,
+    ) -> Result<WhisperTranscriptionResult> {
         let ctx_lock = self.current_context.read().await;
         let ctx = ctx_lock.as_ref()
             .ok_or_else(|| anyhow!("No model loaded. Please load a model first."))?;
@@ -608,8 +628,8 @@ impl WhisperEngine {
         // CRITICAL: Disable timestamp tokens to prevent whisper.cpp chunking heuristics
         // The "single timestamp ending - skip entire chunk" optimization incorrectly discards
         // complete, valid transcriptions. Disabling timestamps forces whisper to return ALL text.
-        params.set_no_timestamps(true);     // Prevent timestamp-based segment skipping
-        params.set_token_timestamps(true);  // Keep for any timestamp-aware features
+        params.set_no_timestamps(true);      // Prevent timestamp-based segment skipping
+        params.set_token_timestamps(false);  // Skip per-token timestamp generation
 
         // PERFORMANCE: Disable ALL whisper.cpp internal printing
         // This reduces C library log spam significantly
@@ -692,7 +712,12 @@ impl WhisperEngine {
             0.0
         };
 
-        Ok((cleaned_result, avg_confidence, is_partial))
+        Ok(WhisperTranscriptionResult {
+            text: cleaned_result,
+            confidence: avg_confidence,
+            is_partial,
+            words: None,
+        })
     }
 
     pub async fn transcribe_audio(&self, audio_data: Vec<f32>, language: Option<String>) -> Result<String> {
@@ -725,8 +750,8 @@ impl WhisperEngine {
         // CRITICAL: Disable timestamp tokens to prevent whisper.cpp chunking heuristics
         // The "single timestamp ending - skip entire chunk" optimization incorrectly discards
         // complete, valid transcriptions. Disabling timestamps forces whisper to return ALL text.
-        params.set_no_timestamps(true);     // Prevent timestamp-based segment skipping
-        params.set_token_timestamps(true);  // Keep for any timestamp-aware features
+        params.set_no_timestamps(true);      // Prevent timestamp-based segment skipping
+        params.set_token_timestamps(false);  // Skip per-token timestamp generation
 
         params.set_print_special(false);
         params.set_print_progress(false);

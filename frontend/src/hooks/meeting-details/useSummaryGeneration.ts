@@ -509,23 +509,13 @@ export function useSummaryGeneration({
       return `[${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}]`;
     };
 
-    const speakers = new Set(allTranscripts.map(t => t.speaker).filter(Boolean));
-    const hasSpeakers = speakers.size > 0;
     const formatLine = (t: Transcript) => {
       const time = formatTime(t.audio_start_time, t.timestamp);
-      const speaker = t.speaker ? `${t.speaker}:` : (hasSpeakers ? 'Unknown:' : '');
-      return speaker
-        ? `${time} ${speaker} ${t.text}`
-        : `${time} ${t.text}`;
+      return `${time} ${t.text}`;
     };
     const fullTranscript = allTranscripts.map(formatLine).join('\n');
 
-    const speakerPreamble = hasSpeakers
-      ? `The following meeting transcript has been speaker-diarized. Each line is prefixed with [MM:SS] timestamp and "Speaker N:" label. Detected speakers: ${[...speakers].join(', ')}. Attribute insights, decisions, and action items to the correct speaker when relevant. Use the speaker labels in your summary (you may rename them based on context if names are mentioned).\n\n`
-      : '';
-    const promptWithSpeakerContext = speakerPreamble + customPrompt;
-
-    await processSummary({ transcriptText: fullTranscript, customPrompt: promptWithSpeakerContext });
+    await processSummary({ transcriptText: fullTranscript, customPrompt });
   }, [meeting.id, fetchAllTranscripts, processSummary, modelConfig, isModelConfigLoading, selectedTemplate, onOpenModelSettings]);
 
   // Public API: Regenerate summary from original transcript

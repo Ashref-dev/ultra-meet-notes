@@ -28,7 +28,6 @@ interface TranscriptPanelProps {
   meetingFolderPath?: string | null;
   onRefetchTranscripts?: () => Promise<void>;
   fullWidth?: boolean;
-  isDiarizingForMeeting?: boolean;
 }
 
 export function TranscriptPanel({
@@ -49,7 +48,6 @@ export function TranscriptPanel({
   meetingFolderPath,
   onRefetchTranscripts,
   fullWidth = false,
-  isDiarizingForMeeting = false,
 }: TranscriptPanelProps) {
   // Convert transcripts to segments if pagination is not used but we want virtualization
   const convertedSegments = useMemo(() => {
@@ -63,7 +61,6 @@ export function TranscriptPanel({
       endTime: t.audio_end_time,
       text: t.text,
       confidence: t.confidence,
-      speaker: t.speaker,
     }));
   }, [transcripts, usePagination, segments]);
 
@@ -85,15 +82,7 @@ export function TranscriptPanel({
           onCopyTranscript={onCopyTranscript}
           onCopyTranscriptMarkdown={onCopyTranscriptMarkdown}
           onOpenMeetingFolder={onOpenMeetingFolder}
-          meetingFolderPath={meetingFolderPath}
         />
-        {isDiarizingForMeeting && (
-          <div className="mx-4 mb-3 flex items-center gap-2.5 rounded-xl bg-card/60 px-3.5 py-2.5 text-sm shadow-sm backdrop-blur-sm">
-            <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
-            <span className="text-foreground">Detecting speakers</span>
-            <span className="ml-auto text-xs text-muted-foreground">This may take a few minutes</span>
-          </div>
-        )}
       </div>
 
       {/* Transcript content - use virtualized view for better performance */}

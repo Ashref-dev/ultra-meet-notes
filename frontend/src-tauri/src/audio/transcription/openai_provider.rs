@@ -149,6 +149,7 @@ impl TranscriptionProvider for OpenAIProvider {
             text: result.text.trim().to_string(),
             confidence: None,
             is_partial: false,
+            words: None,
         })
     }
 

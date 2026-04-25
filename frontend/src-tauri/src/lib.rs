@@ -42,7 +42,6 @@ pub mod audio;
 pub mod config;
 pub mod console_utils;
 pub mod database;
-pub mod diarization;
 pub mod dictation;
 pub mod meeting_app_detector;
 pub mod meeting_detector;
@@ -592,11 +591,6 @@ pub fn run() {
             whisper_engine::commands::whisper_download_model,
             whisper_engine::commands::whisper_cancel_download,
             whisper_engine::commands::whisper_delete_corrupted_model,
-            diarization::commands::download_diarization_models,
-            diarization::commands::cancel_diarization_download,
-            diarization::commands::diarization_models_ready,
-            diarization::commands::diarize_meeting,
-            diarization::commands::auto_diarize_meeting,
             parakeet_engine::commands::parakeet_init,
             parakeet_engine::commands::parakeet_get_available_models,
             parakeet_engine::commands::parakeet_load_model,
@@ -692,7 +686,6 @@ pub fn run() {
             api::api_get_meeting_transcripts,
             api::api_save_meeting_title,
             api::api_save_transcript,
-            api::download_diarization_model,
             api::open_meeting_folder,
             api::test_backend_connection,
             api::debug_backend_connection,

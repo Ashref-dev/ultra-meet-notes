@@ -1530,7 +1530,7 @@ export function ModelSettingsModal({
             'h-10 rounded-lg px-5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none motion-safe:active:scale-[0.98]',
             isDoneDisabled
               ? 'cursor-not-allowed bg-muted text-muted-foreground shadow-none'
-              : 'bg-brand-purple text-white shadow-md hover:bg-brand-purple/90'
+              : 'bg-foreground text-background shadow-md hover:bg-foreground/90'
           )}
           onClick={handleSave}
           disabled={isDoneDisabled}

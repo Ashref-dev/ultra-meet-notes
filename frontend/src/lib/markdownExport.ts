@@ -3,7 +3,7 @@
  */
 import type { Transcript } from '@/types';
 
-/** Convert transcript array to markdown with timestamps and optional speaker labels */
+/** Convert transcript array to markdown with timestamps */
 export function transcriptToMarkdown(transcripts: Transcript[], meetingTitle?: string): string {
   const lines: string[] = [];
 
@@ -13,20 +13,11 @@ export function transcriptToMarkdown(transcripts: Transcript[], meetingTitle?: s
 
   lines.push('## Transcript', '');
 
-  let currentSpeaker = '';
-
   for (const t of transcripts) {
     const timestamp = t.timestamp || '';
-    const speaker = t.speaker || '';
     const text = t.text?.trim() || '';
 
     if (!text) continue;
-
-    // Add speaker header if changed
-    if (speaker && speaker !== currentSpeaker) {
-      lines.push('', `**${speaker}**`, '');
-      currentSpeaker = speaker;
-    }
 
     lines.push(`> ${timestamp ? `[${timestamp}] ` : ''}${text}`);
   }

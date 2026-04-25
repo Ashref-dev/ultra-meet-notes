@@ -313,7 +313,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
         <div className="flex-1">
           <div className="font-medium text-foreground">Keep Audio Recordings</div>
           <div className="text-sm text-muted-foreground">
-            Audio is always captured temporarily so speaker diarization can run. When enabled, the final audio file is kept in your recordings folder. When disabled, the audio is deleted automatically after speaker analysis completes.
+            When enabled, the finalized audio file is kept in your recordings folder. When disabled, the audio is deleted automatically as soon as the meeting save completes.
           </div>
         </div>
         <Switch
@@ -431,7 +431,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       {!preferences.auto_save && (
         <div className="rounded-xl border border-border bg-card p-4 shadow-sm shadow-black/5">
           <div className="text-sm text-muted-foreground">
-            Audio will be deleted automatically after speaker analysis completes. Enable &quot;Keep Audio Recordings&quot; to retain it in your recordings folder.
+            Audio will be deleted automatically after the meeting is saved. Enable &quot;Keep Audio Recordings&quot; to retain it in your recordings folder.
           </div>
         </div>
       )}

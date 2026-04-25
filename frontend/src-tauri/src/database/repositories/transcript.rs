@@ -1,10 +1,23 @@
 use crate::api::{TranscriptSearchResult, TranscriptSegment};
+use crate::audio::transcription::WordTimestamp;
 use chrono::Utc;
 use sqlx::{Connection, Error as SqlxError, SqlitePool};
 use tracing::{error, info};
 use uuid::Uuid;
 
 pub struct TranscriptsRepository;
+
+#[derive(Debug, Clone)]
+pub struct NewTranscriptRow {
+    pub meeting_id: String,
+    pub text: String,
+    pub timestamp: String,
+    pub audio_start_time: Option<f64>,
+    pub audio_end_time: Option<f64>,
+    pub duration: Option<f64>,
+    pub speaker: Option<String>,
+    pub words: Option<Vec<WordTimestamp>>,
+}
 
 impl TranscriptsRepository {
     /// Saves a new meeting and its associated transcript segments.
@@ -46,8 +59,8 @@ impl TranscriptsRepository {
         for segment in transcripts {
             let transcript_id = format!("transcript-{}", Uuid::new_v4());
             let result = sqlx::query(
-                "INSERT INTO transcripts (id, meeting_id, transcript, timestamp, audio_start_time, audio_end_time, duration, speaker)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                "INSERT INTO transcripts (id, meeting_id, transcript, timestamp, audio_start_time, audio_end_time, duration, speaker, words)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
             )
             .bind(&transcript_id)
             .bind(&meeting_id)
@@ -57,6 +70,7 @@ impl TranscriptsRepository {
             .bind(segment.audio_end_time)
             .bind(segment.duration)
             .bind(&segment.speaker)
+            .bind(Self::serialize_words(segment.words.as_ref())?)
             .execute(&mut *transaction)
             .await;
 
@@ -86,16 +100,67 @@ impl TranscriptsRepository {
         pool: &SqlitePool,
         meeting_id: &str,
     ) -> Result<Vec<crate::database::models::Transcript>, SqlxError> {
-        sqlx::query_as::<_, crate::database::models::Transcript>(
+        let rows = sqlx::query_as::<
+            _,
+            (
+                String,
+                String,
+                String,
+                String,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+                Option<f64>,
+                Option<f64>,
+                Option<f64>,
+                Option<String>,
+                Option<String>,
+            ),
+        >(
             "SELECT id, meeting_id, transcript, timestamp, summary, action_items, key_points,
-                    audio_start_time, audio_end_time, duration, speaker
+                    audio_start_time, audio_end_time, duration, speaker, words
              FROM transcripts
              WHERE meeting_id = ?
              ORDER BY COALESCE(audio_start_time, 0) ASC",
         )
         .bind(meeting_id)
         .fetch_all(pool)
-        .await
+        .await?;
+
+        rows
+            .into_iter()
+            .map(
+                |(
+                    id,
+                    meeting_id,
+                    transcript,
+                    timestamp,
+                    summary,
+                    action_items,
+                    key_points,
+                    audio_start_time,
+                    audio_end_time,
+                    duration,
+                    speaker,
+                    words,
+                )| {
+                    Ok(crate::database::models::Transcript {
+                        id,
+                        meeting_id,
+                        transcript,
+                        timestamp,
+                        summary,
+                        action_items,
+                        key_points,
+                        audio_start_time,
+                        audio_end_time,
+                        duration,
+                        speaker,
+                        words: Self::deserialize_words(words)?,
+                    })
+                },
+            )
+            .collect()
     }
 
     pub async fn update_speaker_for_ids(
@@ -121,6 +186,47 @@ impl TranscriptsRepository {
 
         tx.commit().await?;
         Ok(count)
+    }
+
+    pub async fn replace_transcript_with_split_rows(
+        pool: &SqlitePool,
+        meeting_id: &str,
+        original_id: &str,
+        new_rows: Vec<NewTranscriptRow>,
+    ) -> Result<Vec<String>, SqlxError> {
+        let mut conn = pool.acquire().await?;
+        let mut tx = conn.begin().await?;
+
+        sqlx::query("DELETE FROM transcripts WHERE id = ? AND meeting_id = ?")
+            .bind(original_id)
+            .bind(meeting_id)
+            .execute(&mut *tx)
+            .await?;
+
+        let mut inserted_ids = Vec::with_capacity(new_rows.len());
+        for row in new_rows {
+            let transcript_id = format!("transcript-{}", Uuid::new_v4());
+            sqlx::query(
+                "INSERT INTO transcripts (id, meeting_id, transcript, timestamp, audio_start_time, audio_end_time, duration, speaker, words)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&transcript_id)
+            .bind(&row.meeting_id)
+            .bind(&row.text)
+            .bind(&row.timestamp)
+            .bind(row.audio_start_time)
+            .bind(row.audio_end_time)
+            .bind(row.duration)
+            .bind(&row.speaker)
+            .bind(Self::serialize_words(row.words.as_ref())?)
+            .execute(&mut *tx)
+            .await?;
+
+            inserted_ids.push(transcript_id);
+        }
+
+        tx.commit().await?;
+        Ok(inserted_ids)
     }
 
     pub async fn search_transcripts(
@@ -181,5 +287,19 @@ impl TranscriptsRepository {
             }
             None => transcript.chars().take(200).collect(), // Fallback to the start of the transcript
         }
+    }
+
+    fn serialize_words(words: Option<&Vec<WordTimestamp>>) -> Result<Option<String>, SqlxError> {
+        words
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|e| SqlxError::Protocol(format!("Failed to serialize transcript words: {}", e)))
+    }
+
+    fn deserialize_words(words_json: Option<String>) -> Result<Option<Vec<WordTimestamp>>, SqlxError> {
+        words_json
+            .map(|json| serde_json::from_str::<Vec<WordTimestamp>>(&json))
+            .transpose()
+            .map_err(|e| SqlxError::Protocol(format!("Failed to deserialize transcript words: {}", e)))
     }
 }

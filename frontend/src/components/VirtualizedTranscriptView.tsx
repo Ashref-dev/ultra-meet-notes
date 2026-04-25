@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useReducer, startTransition, useEffect, memo, useMemo } from "react";
+import { useRef, useReducer, startTransition, useEffect, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { useTranscriptStreaming } from "@/hooks/useTranscriptStreaming";
@@ -9,7 +9,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { motion, useReducedMotion } from "framer-motion";
 import { TranscriptSegmentData } from "@/types";
 import { Copy } from "lucide-react";
-import { formatSpeakerLabel, hasMultipleSpeakers, speakerColor } from "@/lib/speakerLabels";
 import { cn } from '@/lib/utils';
 
 export interface VirtualizedTranscriptViewProps {
@@ -74,8 +73,6 @@ const TranscriptSegment = memo(function TranscriptSegment({
     timestamp,
     text,
     confidence,
-    speaker,
-    hasMultipleSpeakerLabels,
     isStreaming,
     showConfidence,
 }: {
@@ -83,14 +80,10 @@ const TranscriptSegment = memo(function TranscriptSegment({
     timestamp: number;
     text: string;
     confidence?: number;
-    speaker?: string;
-    hasMultipleSpeakerLabels: boolean;
     isStreaming: boolean;
     showConfidence: boolean;
-}) {
+  }) {
     const displayText = cleanStopWords(text) || (text.trim() === '' ? '[Silence]' : text);
-    const speakerLabel = formatSpeakerLabel(speaker);
-    void hasMultipleSpeakerLabels;
 
     return (
         <div id={`segment-${id}`} className="mb-3">
@@ -113,13 +106,6 @@ const TranscriptSegment = memo(function TranscriptSegment({
                     </TooltipContent>
                 </Tooltip>
                 <div className="flex-1 min-w-0">
-                    {speakerLabel && (
-                        <span
-                            className={`mr-2 inline-flex items-center rounded-lg border px-2 py-0.5 align-baseline text-[11px] font-semibold ${speakerColor(speakerLabel)}`}
-                        >
-                            {speakerLabel}
-                        </span>
-                    )}
                     {isStreaming ? (
                         <span className="rounded-lg border border-border bg-muted px-3 py-2">
                             <span className="text-base leading-relaxed text-foreground">{displayText}</span>
@@ -152,7 +138,6 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
     extraBottomPaddingClassName = '',
 }) => {
     const prefersReducedMotion = useReducedMotion();
-    const hasMultipleSpeakerLabels = useMemo(() => hasMultipleSpeakers(segments), [segments]);
 
     // Create scroll ref first - shared between virtualizer and auto-scroll hook
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -329,8 +314,6 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         timestamp={segment.timestamp}
                                         text={getDisplayText(segment)}
                                         confidence={segment.confidence}
-                                        speaker={segment.speaker}
-                                        hasMultipleSpeakerLabels={hasMultipleSpeakerLabels}
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
                                     />
@@ -387,8 +370,6 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         timestamp={segment.timestamp}
                                         text={getDisplayText(segment)}
                                         confidence={segment.confidence}
-                                        speaker={segment.speaker}
-                                        hasMultipleSpeakerLabels={hasMultipleSpeakerLabels}
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
                                     />

@@ -19,8 +19,8 @@ import { ConfirmDeleteDialog } from '@/components/shared/ConfirmDeleteDialog';
 import { cn } from '@/lib/utils';
 
 const DOWNLOAD_BUTTON_CLASSNAME =
-  'h-11 rounded-lg bg-brand-purple px-6 text-white shadow-md transition-all hover:bg-brand-purple/90 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-brand-purple/40 disabled:cursor-not-allowed disabled:opacity-60';
-const DOWNLOAD_PROGRESS_CLASSNAME = 'bg-brand-purple';
+  'h-11 rounded-lg bg-foreground px-6 text-background shadow-md transition-all hover:bg-foreground/90 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-foreground/40 disabled:cursor-not-allowed disabled:opacity-60';
+const DOWNLOAD_PROGRESS_CLASSNAME = 'bg-foreground';
 
 const BASIC_MODEL_NAMES = ['small', 'medium-q5_0', 'large-v3-q5_0', 'large-v3-turbo', 'large-v3'];
 

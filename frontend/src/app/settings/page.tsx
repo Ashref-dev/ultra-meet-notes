@@ -5,7 +5,6 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { invoke } from '@tauri-apps/api/core';
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -16,14 +15,6 @@ import {
   Database as DatabaseIcon,
   Info,
   RefreshCw,
-  Users,
-  Eye,
-  EyeOff,
-  ExternalLink,
-  CheckCircle2,
-  AlertCircle,
-  Download,
-  Loader2,
 } from 'lucide-react';
 import { useConfig } from '@/contexts/ConfigContext';
 import { PreferenceSettings } from '@/components/PreferenceSettings';
@@ -52,31 +43,8 @@ type RecordingPreferences = {
   preferred_mic_device: string | null;
   preferred_system_device: string | null;
   meeting_app_detection_enabled: boolean;
-  hf_token?: string | null;
   system_audio_backend?: string | null;
 };
-
-type DiarizationDownloadProgress = {
-  percent: number;
-  stage: string;
-};
-
-function formatDownloadStage(stage: string): string {
-  switch (stage) {
-    case 'checking_cache':
-      return 'Checking local cache';
-    case 'requesting_download':
-      return 'Contacting HuggingFace';
-    case 'finalizing':
-      return 'Finalizing model';
-    case 'already_downloaded':
-      return 'Already downloaded';
-    case 'completed':
-      return 'Model ready';
-    default:
-      return stage.replace(/_/g, ' ');
-  }
-}
 
 const UI_SCALE_STORAGE_KEY = 'ui-scale';
 const UI_SCALE_OPTIONS: readonly ScaleOption[] = [80, 90, 100, 110, 120] as const;
@@ -285,41 +253,6 @@ function GeneralSettingsContent() {
   const [ghostModeError, setGhostModeError] = useState<string | null>(null);
   const [uiScale, setUiScale] = useState<ScaleOption>(100);
 
-  type DiarizationProvider = 'local' | 'huggingface';
-  const [diarizationProvider, setDiarizationProvider] = useState<DiarizationProvider>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('diarization-provider') as DiarizationProvider) || 'local';
-    }
-    return 'local';
-  });
-  const [hfToken, setHfToken] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('hf-token') || '';
-    }
-    return '';
-  });
-  const [showHfToken, setShowHfToken] = useState(false);
-  const [hfTokenSaved, setHfTokenSaved] = useState(false);
-  const [savedHfToken, setSavedHfToken] = useState('');
-  const [downloadPercent, setDownloadPercent] = useState(0);
-  const [downloadStage, setDownloadStage] = useState('idle');
-  const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [isDownloadingModel, setIsDownloadingModel] = useState(false);
-  const [isModelReady, setIsModelReady] = useState(false);
-
-  const canSaveHfToken = hfToken.startsWith('hf_');
-  const isHfTokenPersisted = canSaveHfToken && hfToken.trim() === savedHfToken;
-
-  const persistHfToken = useCallback(async (token: string) => {
-    const preferences = await invoke<RecordingPreferences>('get_recording_preferences');
-    await invoke('set_recording_preferences', {
-      preferences: {
-        ...preferences,
-        hf_token: token.trim(),
-      },
-    });
-  }, []);
-
   const loadGhostMode = useCallback(async () => {
     setGhostModeLoading(true);
     setGhostModeError(null);
@@ -338,69 +271,6 @@ function GeneralSettingsContent() {
   useEffect(() => {
     void loadGhostMode();
   }, [loadGhostMode]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadSavedHfToken = async () => {
-      try {
-        const preferences = await invoke<RecordingPreferences>('get_recording_preferences');
-        const persistedToken = preferences.hf_token?.trim() ?? '';
-        const localToken = typeof window !== 'undefined' ? window.localStorage.getItem('hf-token')?.trim() ?? '' : '';
-        const resolvedToken = localToken || persistedToken;
-
-        if (!isMounted) {
-          return;
-        }
-
-        setSavedHfToken(persistedToken || resolvedToken);
-
-        if (!hfToken && resolvedToken) {
-          setHfToken(resolvedToken);
-        }
-
-        if (persistedToken !== localToken && resolvedToken && typeof window !== 'undefined') {
-          window.localStorage.setItem('hf-token', resolvedToken);
-        }
-      } catch (error) {
-        console.error('[SettingsPage] Failed to load saved HF token:', error);
-      }
-    };
-
-    void loadSavedHfToken();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [hfToken]);
-
-  useEffect(() => {
-    let unlisten: UnlistenFn | undefined;
-
-    const setupListener = async () => {
-      unlisten = await listen<DiarizationDownloadProgress>('diarization-model-download-progress', (event) => {
-        const nextPercent = event.payload.percent ?? 0;
-        const nextStage = event.payload.stage ?? 'idle';
-
-        setDownloadPercent(nextPercent);
-        setDownloadStage(nextStage);
-
-        if (nextStage === 'already_downloaded' || nextStage === 'completed') {
-          setIsDownloadingModel(false);
-          setIsModelReady(true);
-          setDownloadError(null);
-        }
-      });
-    };
-
-    void setupListener();
-
-    return () => {
-      if (unlisten) {
-        unlisten();
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -558,180 +428,6 @@ function GeneralSettingsContent() {
             </div>
           }
         />
-      </SettingsPanelCard>
-
-      <SettingsPanelCard className="space-y-6">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-muted-foreground" />
-            <h2 className="text-lg font-semibold text-foreground">Speaker Diarization</h2>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Identify who said what in your meetings. Runs fully on-device.
-          </p>
-        </div>
-
-        <SettingsSection
-          label="Diarization Engine"
-          description="Select how speaker identification is performed after recording."
-          control={
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDiarizationProvider('local');
-                    localStorage.setItem('diarization-provider', 'local');
-                  }}
-                  className={`flex flex-col gap-1.5 rounded-xl border p-4 text-left transition-colors ${
-                    diarizationProvider === 'local'
-                      ? 'border-foreground bg-foreground/5'
-                      : 'border-border hover:border-foreground/30 hover:bg-muted'
-                  }`}
-                >
-                  <span className="text-sm font-medium text-foreground">Local (Built-in)</span>
-                  <span className="text-xs text-muted-foreground">
-                    Uses whisper.cpp tinydiarize. Basic accuracy, runs during transcription. No setup needed.
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDiarizationProvider('huggingface');
-                    localStorage.setItem('diarization-provider', 'huggingface');
-                  }}
-                  className={`flex flex-col gap-1.5 rounded-xl border p-4 text-left transition-colors ${
-                    diarizationProvider === 'huggingface'
-                      ? 'border-foreground bg-foreground/5'
-                      : 'border-border hover:border-foreground/30 hover:bg-muted'
-                  }`}
-                >
-                  <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    Enhanced (Pyannote)
-                    <span className="rounded-lg bg-gradient-to-r from-[#5B4DCC]/20 to-[#FFD166]/20 px-2 py-0.5 text-[10px] font-semibold text-foreground">
-                      Recommended
-                    </span>
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    State-of-the-art accuracy via pyannote + WeSpeaker ONNX. Runs fully locally after recording. ~35 MB one-time download.
-                  </span>
-                </button>
-              </div>
-            </div>
-          }
-        />
-
-        {diarizationProvider === 'huggingface' && (
-          <>
-            <div className="border-t border-border" />
-
-            <SettingsSection
-              label="Diarization Models"
-              description="Downloads the pyannote segmentation + WeSpeaker embedding ONNX models (~35 MB). Fully offline after download. No account required."
-              control={
-                <div className="space-y-3">
-                  <div className="space-y-3 rounded-xl border border-border bg-background/70 p-3">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <Button
-                        variant="brand"
-                        disabled={isDownloadingModel || isModelReady}
-                        onClick={async () => {
-                          setIsDownloadingModel(true);
-                          setIsModelReady(false);
-                          setDownloadError(null);
-                          setDownloadPercent(8);
-                          setDownloadStage('checking_cache');
-
-                          try {
-                            await invoke('download_diarization_model');
-                            setIsDownloadingModel(false);
-                            setIsModelReady(true);
-                            toast.success('Speaker diarization model is ready', {
-                              description: 'The pyannote model has been downloaded and cached locally.',
-                            });
-                          } catch (error) {
-                            const message = error instanceof Error ? error.message : String(error);
-                            setIsDownloadingModel(false);
-                            setIsModelReady(false);
-                            setDownloadError(message);
-                            toast.error('Failed to download diarization model', {
-                              description: message,
-                            });
-                          }
-                        }}
-                        className={`h-11 gap-2 rounded-lg px-6 transition-all ${
-                          isModelReady
-                            ? 'bg-success text-success-foreground disabled:opacity-100'
-                            : 'bg-brand-purple text-white hover:bg-brand-purple/90'
-                        }`}
-                      >
-                        {isDownloadingModel ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : isModelReady ? (
-                          <CheckCircle2 className="h-4 w-4" />
-                        ) : (
-                          <Download className="h-4 w-4" />
-                        )}
-                        <span>
-                          {isDownloadingModel ? 'Downloading...' : isModelReady ? 'Model Ready' : 'Download Model'}
-                        </span>
-                      </Button>
-
-                      {isModelReady && (
-                        <span className="inline-flex items-center gap-2 rounded-lg border border-success/20 bg-success/10 px-3 py-1 text-xs font-medium text-success">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          Ready for diarization
-                        </span>
-                      )}
-                    </div>
-
-                    {(isDownloadingModel || isModelReady) && (
-                      <div className="space-y-1.5">
-                        <div className="h-2 overflow-hidden rounded-lg bg-muted">
-                          <div
-                            className="h-full rounded-lg bg-brand-purple transition-all duration-300"
-                            style={{ width: `${Math.max(0, Math.min(downloadPercent, 100))}%` }}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{formatDownloadStage(downloadStage)}</span>
-                          <span>{Math.round(downloadPercent)}%</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {downloadError && (
-                      <div className="text-sm text-destructive">
-                        {downloadError}{' '}
-                        <Button
-                          variant="link"
-                          onClick={() => {
-                            setDownloadError(null);
-                            setIsModelReady(false);
-                          }}
-                          className="font-medium h-auto p-0"
-                        >
-                          Retry
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="rounded-xl border border-border bg-muted/50 p-3 space-y-2">
-                    <p className="text-xs font-medium text-foreground">How it works:</p>
-                    <ol className="list-decimal list-inside space-y-1 text-xs text-muted-foreground">
-                      <li>Click <span className="font-medium text-foreground">Download Model</span> — fetches ~35 MB of ONNX models from GitHub</li>
-                      <li>Open a saved meeting and click <span className="font-medium text-foreground">Analyze Speakers</span> to label segments</li>
-                    </ol>
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      Runs entirely on-device after download. No account, no HuggingFace token, no network required at analysis time.
-                    </p>
-                  </div>
-                </div>
-              }
-            />
-          </>
-        )}
       </SettingsPanelCard>
 
       <PreferenceSettings />

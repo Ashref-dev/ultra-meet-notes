@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { listen } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { useTranscripts } from '@/contexts/TranscriptContext';
 import { useSidebar } from '@/components/Sidebar/SidebarProvider';
@@ -79,10 +78,9 @@ export function useRecordingStop(
           message: string;
           folder_path?: string;
           meeting_name?: string;
-          keep_audio?: boolean;
         }>('recording-stopped', async (event) => {
           recordingStoppedDataRef.current = (async () => {
-            const { folder_path, meeting_name, keep_audio } = event.payload;
+            const { folder_path, meeting_name } = event.payload;
 
             if (folder_path) {
               sessionStorage.setItem('last_recording_folder_path', folder_path);
@@ -90,7 +88,6 @@ export function useRecordingStop(
             if (meeting_name) {
               sessionStorage.setItem('last_recording_meeting_name', meeting_name);
             }
-            sessionStorage.setItem('last_recording_keep_audio', String(keep_audio ?? true));
           })();
 
         });
@@ -261,23 +258,6 @@ export function useRecordingStop(
           console.log('✅ Successfully saved COMPLETE meeting with ID:', meetingId);
           console.log('   Transcripts:', freshTranscripts.length);
           console.log('   folder_path:', folderPath);
-
-          const keepAudioAfterAnalysis = sessionStorage.getItem('last_recording_keep_audio') !== 'false';
-          if (folderPath && meetingId) {
-            void (async () => {
-              try {
-                await invoke<{ started: boolean; reason?: string }>('auto_diarize_meeting', {
-                  meetingId,
-                  folderPath,
-                  keepAudio: keepAudioAfterAnalysis,
-                });
-              } catch (diarErr) {
-                console.warn('[auto-diarize] invoke failed:', diarErr);
-              } finally {
-                sessionStorage.removeItem('last_recording_keep_audio');
-              }
-            })();
-          }
 
           await markMeetingAsSaved();
 

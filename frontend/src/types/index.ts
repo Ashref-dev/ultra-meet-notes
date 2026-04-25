@@ -17,7 +17,7 @@ export interface Transcript {
   audio_end_time?: number;   // Seconds from recording start (e.g., 128.6)
   duration?: number;          // Segment duration in seconds (e.g., 3.3)
   is_refinement?: boolean;   // True for full-run refinement segments that should replace chunks
-  speaker?: string;          // Speaker label from diarization (e.g., "Speaker 1")
+  speaker?: string;
 }
 
 export interface TranscriptUpdate {
@@ -110,21 +110,4 @@ export interface TranscriptSegmentData {
   endTime?: number; // audio_end_time in seconds
   text: string;
   confidence?: number;
-  speaker?: string;
-}
-
-/** Speaker diarization segment from pyannote or whisper.cpp */
-export interface DiarizationSegment {
-  speaker: string;
-  start: number; // seconds from recording start
-  end: number; // seconds from recording start
-}
-
-/** Diarization configuration */
-export interface DiarizationConfig {
-  provider: 'local' | 'huggingface';
-  hfToken?: string;
-  numSpeakers?: number;
-  minSpeakers?: number;
-  maxSpeakers?: number;
 }

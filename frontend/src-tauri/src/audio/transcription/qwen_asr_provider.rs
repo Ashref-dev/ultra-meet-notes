@@ -84,6 +84,7 @@ impl TranscriptionProvider for QwenAsrProvider {
                 text: clean_qwen_asr_output(&text),
                 confidence: None, // Qwen3-ASR doesn't provide confidence scores
                 is_partial: false,
+                words: None,
             }),
             Err(e) => Err(TranscriptionError::EngineFailed(e.to_string())),
         }

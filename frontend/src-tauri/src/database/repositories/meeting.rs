@@ -1,5 +1,6 @@
 use crate::api::{MeetingDetails, MeetingTranscript};
 use crate::database::models::{MeetingModel, Transcript};
+use crate::database::repositories::transcript::TranscriptsRepository;
 use chrono::Utc;
 use sqlx::{Connection, Error as SqlxError, SqliteConnection, SqlitePool};
 use tracing::{error, info};
@@ -74,11 +75,7 @@ impl MeetingsRepository {
 
         if let Some(meeting) = meeting {
             // Get all transcripts for this meeting
-            let transcripts =
-                sqlx::query_as::<_, Transcript>("SELECT * FROM transcripts WHERE meeting_id = ?")
-                    .bind(meeting_id)
-                    .fetch_all(&mut *transaction)
-                    .await?;
+            let transcripts = TranscriptsRepository::list_by_meeting(pool, meeting_id).await?;
 
             transaction.commit().await?;
 
@@ -92,6 +89,7 @@ impl MeetingsRepository {
                     audio_end_time: t.audio_end_time,
                     duration: t.duration,
                     speaker: t.speaker,
+                    words: t.words,
                 })
                 .collect::<Vec<_>>();
 
@@ -150,17 +148,12 @@ impl MeetingsRepository {
         .await?;
 
         // Get paginated transcripts ordered by audio_start_time
-        let transcripts = sqlx::query_as::<_, Transcript>(
-            "SELECT * FROM transcripts
-             WHERE meeting_id = ?
-             ORDER BY audio_start_time ASC
-             LIMIT ? OFFSET ?"
-        )
-        .bind(meeting_id)
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(pool)
-        .await?;
+        let transcripts = TranscriptsRepository::list_by_meeting(pool, meeting_id)
+            .await?
+            .into_iter()
+            .skip(offset.max(0) as usize)
+            .take(limit.max(0) as usize)
+            .collect();
 
         Ok((transcripts, total.0))
     }

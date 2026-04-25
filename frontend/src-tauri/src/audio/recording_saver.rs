@@ -7,6 +7,8 @@ use tokio::sync::mpsc;
 use serde::{Serialize, Deserialize};
 use std::path::PathBuf;
 
+use crate::audio::transcription::WordTimestamp;
+
 use super::recording_state::AudioChunk;
 use super::audio_processing::{create_meeting_folder, sanitize_filename};
 use super::incremental_saver::IncrementalAudioSaver;
@@ -25,6 +27,8 @@ pub struct TranscriptSegment {
     pub sequence_id: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speaker: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub words: Option<Vec<WordTimestamp>>,
 }
 
 /// Meeting metadata structure
@@ -141,6 +145,7 @@ impl RecordingSaver {
             confidence: 1.0,
             sequence_id: 0,
             speaker: None,
+            words: None,
         };
         self.add_transcript_segment(segment);
     }
@@ -474,9 +479,34 @@ impl RecordingSaver {
             info!("✅ Metadata updated with duration: {:?}s", metadata.duration_seconds);
         }
 
+        let keep_audio_recordings = self.preferences.auto_save;
+        if !keep_audio_recordings {
+            match std::fs::remove_file(&final_audio_path) {
+                Ok(_) => {
+                    info!(
+                        "Auto-deleted audio file (keep_audio_recordings=false): {}",
+                        final_audio_path.display()
+                    );
+                }
+                Err(err) => {
+                    warn!(
+                        "Failed to auto-delete audio file {}: {}",
+                        final_audio_path.display(),
+                        err
+                    );
+                }
+            }
+        }
+
+        let emitted_audio_path = if keep_audio_recordings {
+            Some(final_audio_path.to_string_lossy().to_string())
+        } else {
+            None
+        };
+
         // Emit save event with audio and transcript paths
         let save_event = serde_json::json!({
-            "audio_file": final_audio_path.to_string_lossy(),
+            "audio_file": emitted_audio_path,
             "transcript_file": self.notes_folder.as_ref()
                 .map(|f| f.join("transcripts.json").to_string_lossy().to_string()),
             "meeting_name": self.meeting_name,
@@ -493,7 +523,7 @@ impl RecordingSaver {
             segments.clear();
         }
 
-        Ok(Some(final_audio_path.to_string_lossy().to_string()))
+        Ok(emitted_audio_path)
     }
 
     /// Get the meeting folder path (for passing to backend)

@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import { listen } from '@tauri-apps/api/event';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Summary, SummaryResponse, Transcript, TranscriptSegmentData } from '@/types';
 import { invoke } from '@tauri-apps/api/core';
@@ -76,7 +75,6 @@ export default function PageContent({
   const [isRecording] = useState(false);
   const [summaryResponse] = useState<SummaryResponse | null>(null);
   const [activeTab, setActiveTab] = useState<'notes' | 'transcript'>(summaryData ? 'notes' : 'transcript');
-  const [isDiarizingForMeeting, setIsDiarizingForMeeting] = useState(false);
 
   useTabHotkeys(setActiveTab);
 
@@ -186,46 +184,6 @@ export default function PageContent({
   const autoGenerateStartedRef = useRef(false);
 
   useEffect(() => {
-    let unlistenStarted: (() => void) | undefined;
-    let unlistenApplied: (() => void) | undefined;
-    let unlistenFailed: (() => void) | undefined;
-
-    const setup = async () => {
-      unlistenStarted = await listen<{ meeting_id: string }>('diarization-started', (event) => {
-        if (event.payload.meeting_id === meeting.id) {
-          setIsDiarizingForMeeting(true);
-        }
-      });
-
-      unlistenApplied = await listen<{ meeting_id: string; speaker_count: number; transcripts_labeled: number; audio_deleted: boolean }>(
-        'diarization-applied',
-        async (event) => {
-          if (event.payload.meeting_id === meeting.id) {
-            setIsDiarizingForMeeting(false);
-            if (onRefetchTranscripts) {
-              await onRefetchTranscripts();
-            }
-          }
-        }
-      );
-
-      unlistenFailed = await listen<{ meeting_id: string; error: string }>('diarization-failed', (event) => {
-        if (event.payload.meeting_id === meeting.id) {
-          setIsDiarizingForMeeting(false);
-        }
-      });
-    };
-
-    void setup();
-
-    return () => {
-      unlistenStarted?.();
-      unlistenApplied?.();
-      unlistenFailed?.();
-    };
-  }, [meeting.id, onRefetchTranscripts]);
-
-  useEffect(() => {
     if (!shouldAutoGenerate) {
       autoGenerateStartedRef.current = false;
       return;
@@ -289,7 +247,6 @@ export default function PageContent({
               meetingFolderPath={meeting.folder_path}
               onRefetchTranscripts={onRefetchTranscripts}
               fullWidth={true}
-              isDiarizingForMeeting={isDiarizingForMeeting}
             />
           </ErrorBoundary>
         ) : (

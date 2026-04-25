@@ -5,7 +5,6 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { ConfidenceIndicator } from './ConfidenceIndicator';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { motion, useReducedMotion } from 'framer-motion';
-import { formatSpeakerLabel, hasMultipleSpeakers, speakerColor } from '@/lib/speakerLabels';
 
 interface TranscriptViewProps {
   transcripts: Transcript[];
@@ -107,11 +106,6 @@ function cleanStopWords(text: string): string {
 export const TranscriptView: React.FC<TranscriptViewProps> = ({ transcripts, isRecording = false, isPaused = false, isProcessing = false, isStopping = false, enableStreaming = false }) => {
   const [speechDetected, setSpeechDetected] = useState(false);
   const prefersReducedMotion = useReducedMotion();
-
-  const hasSpeakerData = useMemo(
-    () => hasMultipleSpeakers(transcripts),
-    [transcripts]
-  );
 
   // Streaming effect state
   const [streamingTranscript, setStreamingTranscript] = useState<{
@@ -257,10 +251,6 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({ transcripts, isR
         const sizerText = cleanStopWords(isStreaming ? streamingTranscript.fullText : transcript.text)
           || (originalWasEmpty && !isStreaming ? '[Silence]' : '');
 
-        const currentSpeaker = formatSpeakerLabel(transcript.speaker);
-        const prevSpeaker = index > 0 ? formatSpeakerLabel(transcripts[index - 1].speaker) : null;
-        const showSpeakerLabel = hasSpeakerData && currentSpeaker && currentSpeaker !== prevSpeaker;
-
         return (
           <motion.div
             key={transcript.id ? `${transcript.id}-${index}` : `transcript-${index}`}
@@ -269,13 +259,6 @@ export const TranscriptView: React.FC<TranscriptViewProps> = ({ transcripts, isR
             transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.15 }}
             className="mb-3"
           >
-            {showSpeakerLabel && (
-                <div className="flex items-center gap-2 mt-3 mb-1.5">
-                <span className={`inline-flex items-center rounded-lg border px-2 py-0.5 text-xs font-medium ${speakerColor(currentSpeaker)}`}>
-                  {currentSpeaker}
-                </span>
-              </div>
-            )}
             <div className="flex items-start gap-2">
               <Tooltip>
                 <TooltipTrigger asChild>

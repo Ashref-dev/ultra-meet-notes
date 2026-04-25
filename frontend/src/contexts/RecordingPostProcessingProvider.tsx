@@ -2,7 +2,6 @@
 
 import React, { useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { toast } from 'sonner';
 import { useRecordingStop } from '@/hooks/useRecordingStop';
 
 /**
@@ -57,54 +56,6 @@ export function RecordingPostProcessingProvider({ children }: { children: React.
       }
     };
   }, [handleRecordingStop]);
-
-  useEffect(() => {
-    let unlistenApplied: (() => void) | undefined;
-    let unlistenFailed: (() => void) | undefined;
-    let unlistenStarted: (() => void) | undefined;
-
-    const setup = async () => {
-      unlistenStarted = await listen('diarization-started', () => {
-        toast.info('Detecting speakers', {
-          description: 'Speaker labels will be added to your transcript automatically.',
-          duration: 4000,
-        });
-      });
-
-      unlistenApplied = await listen<{
-        meeting_id: string;
-        speaker_count: number;
-        transcripts_labeled: number;
-        audio_deleted: boolean;
-      }>('diarization-applied', (event) => {
-        const { speaker_count, transcripts_labeled, audio_deleted } = event.payload;
-        const speakerLabel = speaker_count === 1 ? 'speaker' : 'speakers';
-        toast.success(`Detected ${speaker_count} ${speakerLabel}`, {
-          description: `${transcripts_labeled} transcript segments labeled.${audio_deleted ? ' Audio deleted per your preference.' : ''}`,
-          duration: 6000,
-        });
-      });
-
-      unlistenFailed = await listen<{ meeting_id: string; error: string }>(
-        'diarization-failed',
-        (event) => {
-          console.warn('[diarization] failed:', event.payload.error);
-          toast.error('Speaker analysis failed', {
-            description: event.payload.error,
-            duration: 6000,
-          });
-        }
-      );
-    };
-
-    setup();
-
-    return () => {
-      unlistenStarted?.();
-      unlistenApplied?.();
-      unlistenFailed?.();
-    };
-  }, []);
 
   return <>{children}</>;
 }

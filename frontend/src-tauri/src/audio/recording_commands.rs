@@ -110,10 +110,8 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
     // Create new recording manager
     let mut manager = RecordingManager::new();
 
-    // Load recording preferences to get user-facing "keep audio" pref AND device preferences.
-    // IMPORTANT: Audio is ALWAYS saved internally so diarization has something to analyze.
-    // The user's `auto_save` preference is remembered and honored after post-processing:
-    // if false, the final audio.mp4 is deleted once diarization is complete.
+    // Load recording preferences to get the user's audio retention preference
+    // plus their preferred recording devices.
     let (preferences, _user_wants_keep_audio, preferred_mic_name, preferred_system_name) =
         match super::recording_preferences::load_recording_preferences(&app).await {
             Ok(prefs) => {
@@ -132,7 +130,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
                 (defaults, true, None, None)
             }
         };
-    let auto_save = true;
+    let auto_save = preferences.auto_save;
 
     // ============================================================================
     // MICROPHONE DEVICE RESOLUTION: Preference → Default → Error
@@ -284,6 +282,7 @@ pub async fn start_recording_with_meeting_name<R: Runtime>(
                     confidence: update.confidence,
                     sequence_id: update.sequence_id,
                     speaker: None,
+                    words: None,
                 };
 
                 // Save to recording manager
@@ -456,6 +455,7 @@ pub async fn start_recording_with_devices_and_meeting<R: Runtime>(
                     confidence: update.confidence,
                     sequence_id: update.sequence_id,
                     speaker: None,
+                    words: None,
                 };
 
                 // Save to recording manager
@@ -788,20 +788,13 @@ pub async fn stop_recording<R: Runtime>(
         }),
     );
 
-    let keep_audio_after_analysis =
-        crate::audio::recording_preferences::load_recording_preferences(&app)
-            .await
-            .map(|p| p.auto_save)
-            .unwrap_or(true);
-
     app.emit(
         "recording-stopped",
         serde_json::json!({
             "message": "Recording stopped - frontend will save after all transcripts received",
             "folder_path": folder_path_str,
             "notes_folder_path": notes_folder_path_str,
-            "meeting_name": meeting_name_str,
-            "keep_audio": keep_audio_after_analysis
+            "meeting_name": meeting_name_str
         }),
     )
     .map_err(|e| e.to_string())?;
