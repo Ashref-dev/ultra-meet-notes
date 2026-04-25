@@ -903,7 +903,7 @@ export function ModelSettingsModal({
       <div className="space-y-4">
         <div>
           <Label>Summarization Model</Label>
-          <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="mt-1 flex flex-col gap-3">
             <Select
               value={modelConfig.provider}
               onValueChange={(value) => {
@@ -958,7 +958,7 @@ export function ModelSettingsModal({
                 }
               }}
             >
-              <SelectTrigger className="w-full sm:min-w-[280px] sm:shrink-0">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select provider" />
               </SelectTrigger>
               <SelectContent className="max-h-64 overflow-y-auto">
@@ -973,68 +973,67 @@ export function ModelSettingsModal({
             </Select>
 
             {modelConfig.provider !== 'builtin-ai' && modelConfig.provider !== 'custom-openai' && (
-              <div className="flex w-full flex-col gap-3 sm:min-w-0 sm:flex-1 sm:flex-row sm:items-center">
-                <div className="w-full min-w-0 flex-1">
-                  <Popover open={modelComboboxOpen} onOpenChange={setModelComboboxOpen} modal={true}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={modelComboboxOpen}
-                        className="w-full min-w-0 justify-between font-normal"
-                      >
-                        <span className="truncate text-left">
-                          {modelConfig.model || "Select model..."}
-                        </span>
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search models..." />
-                        <CommandList className="max-h-[300px]">
-                          {(modelConfig.provider === 'openrouter' && isLoadingOpenRouter) ||
-                           (modelConfig.provider === 'openai' && isLoadingOpenAI) ||
-                           (modelConfig.provider === 'claude' && isLoadingClaude) ||
-                           (modelConfig.provider === 'groq' && isLoadingGroq) ? (
-                            <div className="py-6 text-center text-sm text-muted-foreground">
-                              <RefreshCw className="mx-auto mb-2 h-4 w-4 animate-spin" />
-                              Loading models...
-                            </div>
-                           ) : (
-                            <>
-                              <CommandEmpty>
-                                {modelConfig.provider === 'openrouter' && openRouterError
-                                  ? openRouterError
-                                  : 'No models found.'}
-                              </CommandEmpty>
-                              <CommandGroup>
-                                {modelOptions[modelConfig.provider]?.map((model) => (
-                                  <CommandItem
-                                    key={model}
-                                    value={model}
-                                    onSelect={(currentValue) => {
-                                      setModelConfig((prev: ModelConfig) => ({ ...prev, model: currentValue }));
-                                      setModelComboboxOpen(false);
-                                    }}
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        modelConfig.model === model ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                    <span className="truncate">{model}</span>
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </>
-                          )}
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
+              <div className="flex w-full flex-col gap-2">
+                <Label className="text-sm text-muted-foreground">Model</Label>
+                <Popover open={modelComboboxOpen} onOpenChange={setModelComboboxOpen} modal={true}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={modelComboboxOpen}
+                      className="w-full justify-between font-normal"
+                    >
+                      <span className="truncate text-left">
+                        {modelConfig.model || "Select model..."}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search models..." />
+                      <CommandList className="max-h-[300px]">
+                        {(modelConfig.provider === 'openrouter' && isLoadingOpenRouter) ||
+                         (modelConfig.provider === 'openai' && isLoadingOpenAI) ||
+                         (modelConfig.provider === 'claude' && isLoadingClaude) ||
+                         (modelConfig.provider === 'groq' && isLoadingGroq) ? (
+                          <div className="py-6 text-center text-sm text-muted-foreground">
+                            <RefreshCw className="mx-auto mb-2 h-4 w-4 animate-spin" />
+                            Loading models...
+                          </div>
+                         ) : (
+                          <>
+                            <CommandEmpty>
+                              {modelConfig.provider === 'openrouter' && openRouterError
+                                ? openRouterError
+                                : 'No models found.'}
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {modelOptions[modelConfig.provider]?.map((model) => (
+                                <CommandItem
+                                  key={model}
+                                  value={model}
+                                  onSelect={(currentValue) => {
+                                    setModelConfig((prev: ModelConfig) => ({ ...prev, model: currentValue }));
+                                    setModelComboboxOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      modelConfig.model === model ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  <span className="truncate">{model}</span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
 
                 {modelConfig.provider === 'openrouter' && (
                   <Button
@@ -1043,7 +1042,7 @@ export function ModelSettingsModal({
                     size="sm"
                     onClick={handleTestOpenRouter}
                     disabled={!apiKey?.trim() || isTestingConnection}
-                    className="w-full sm:w-auto sm:shrink-0"
+                    className="w-full"
                   >
                     {isTestingConnection ? (
                       <>
@@ -1531,7 +1530,7 @@ export function ModelSettingsModal({
             'h-10 rounded-lg px-5 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none motion-safe:active:scale-[0.98]',
             isDoneDisabled
               ? 'cursor-not-allowed bg-muted text-muted-foreground shadow-none'
-              : 'bg-gradient-to-r from-[#5B4DCC] to-[#FFD166] text-white shadow-md hover:from-[#6A5ACF] hover:to-[#FFE08A]'
+              : 'bg-brand-purple text-white shadow-md hover:bg-brand-purple/90'
           )}
           onClick={handleSave}
           disabled={isDoneDisabled}
