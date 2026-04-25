@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
-import { UpdateDialog } from "./UpdateDialog";
 import { updateService, UpdateInfo } from '@/services/updateService';
 import { Button } from './ui/button';
 import { Loader2, CheckCircle2, Globe, Github, Mail, ExternalLink, Heart } from 'lucide-react';
@@ -14,7 +13,6 @@ export function About() {
     const [currentVersion, setCurrentVersion] = useState<string>('1.0.0');
     const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
     const [isChecking, setIsChecking] = useState(false);
-    const [showUpdateDialog, setShowUpdateDialog] = useState(false);
 
     const cardClassName = 'rounded-xl bg-card/60 p-5 shadow-sm backdrop-blur-sm';
     const featureCardClassName = 'rounded-xl bg-card/60 p-3 shadow-sm backdrop-blur-sm transition-[background-color,transform] duration-200 hover:bg-card/80 motion-reduce:transition-none motion-safe:active:scale-[0.98]';
@@ -37,9 +35,16 @@ export function About() {
             const info = await updateService.checkForUpdates(true);
             setUpdateInfo(info);
             if (info.available) {
-                setShowUpdateDialog(true);
+                toast.success(`Update available: v${info.version}`, {
+                    description: 'Visit GitHub to download the latest release.',
+                    action: info.downloadUrl ? {
+                        label: 'Download',
+                        onClick: () => void invoke('open_external_url', { url: info.downloadUrl }),
+                    } : undefined,
+                    duration: 10000,
+                });
             } else {
-                toast.success('You are running the latest version');
+                toast.success('You are on the latest version');
             }
         } catch (error: unknown) {
             console.error('Failed to check for updates:', error);
@@ -54,11 +59,11 @@ export function About() {
         <div className="space-y-4 p-4">
             <div className="brand-grain relative overflow-hidden rounded-xl brand-gradient-warm-linear p-6 text-center shadow-lg">
                 <div className="relative z-10">
-                    <div className="mb-4 inline-flex h-20 w-20 items-center justify-center rounded-xl bg-white/15 backdrop-blur-md shadow-inner">
-                        <LogoGlyph size={52} mono className="text-white" />
+                    <div className="mb-4">
+                        <LogoGlyph size={56} mono className="text-white drop-shadow-lg" />
                     </div>
                     <div className="mb-1 flex items-center justify-center">
-                        <Wordmark height={26} className="text-white" title="Ultra" />
+                        <Wordmark height={26} className="!text-white" title="Ultra" />
                     </div>
                     <p className="mt-1 text-xs text-white/80">v{currentVersion}</p>
                     <p className="mt-2 text-sm text-white/90">
@@ -181,11 +186,6 @@ export function About() {
                 </p>
             </div>
 
-            <UpdateDialog
-                open={showUpdateDialog}
-                onOpenChange={setShowUpdateDialog}
-                updateInfo={updateInfo}
-            />
         </div>
 
     )

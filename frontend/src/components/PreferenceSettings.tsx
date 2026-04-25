@@ -21,7 +21,7 @@ export function PreferenceSettings() {
   } = useConfig();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean | null>(null);
-  const [meetingDetectionEnabled, setMeetingDetectionEnabled] = useState<boolean>(true);
+  const [meetingDetectionEnabled, setMeetingDetectionEnabled] = useState<boolean>(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [previousNotificationsEnabled, setPreviousNotificationsEnabled] = useState<boolean | null>(null);
 
@@ -31,8 +31,8 @@ export function PreferenceSettings() {
 
     // Load meeting detection state
     invoke<MeetingDetectionPreferences>('get_recording_preferences')
-      .then((preferences) => setMeetingDetectionEnabled(preferences.meeting_app_detection_enabled !== false))
-      .catch(() => setMeetingDetectionEnabled(true));
+      .then((preferences) => setMeetingDetectionEnabled(preferences.meeting_app_detection_enabled === true))
+      .catch(() => setMeetingDetectionEnabled(false));
   }, [loadPreferences]);
 
   // Update notificationsEnabled when notificationSettings are loaded from global state
@@ -49,9 +49,9 @@ export function PreferenceSettings() {
       }
     } else if (!isLoadingPreferences) {
       // If not loading and no settings, use default
-      setNotificationsEnabled(true);
+      setNotificationsEnabled(false);
       if (isInitialLoad) {
-        setPreviousNotificationsEnabled(true);
+        setPreviousNotificationsEnabled(false);
         setIsInitialLoad(false);
       }
     }

@@ -413,7 +413,7 @@ function GeneralSettingsContent() {
     if (UI_SCALE_OPTIONS.includes(parsedScale as ScaleOption)) {
       setUiScale(parsedScale as ScaleOption);
     } else {
-      setUiScale(90);
+      setUiScale(100);
     }
   }, []);
 
@@ -662,7 +662,7 @@ function GeneralSettingsContent() {
                         className={`h-11 gap-2 rounded-lg px-6 transition-all ${
                           isModelReady
                             ? 'bg-success text-success-foreground disabled:opacity-100'
-                            : 'bg-gradient-to-r from-[#5B4DCC] via-[#F06A8B] to-[#FFD166] text-white hover:from-[#6A5ACF] hover:via-[#F47AAC] hover:to-[#FFE08A]'
+                            : 'bg-brand-purple text-white hover:bg-brand-purple/90'
                         }`}
                       >
                         {isDownloadingModel ? (
@@ -689,7 +689,7 @@ function GeneralSettingsContent() {
                       <div className="space-y-1.5">
                         <div className="h-2 overflow-hidden rounded-lg bg-muted">
                           <div
-                            className="h-full rounded-lg bg-gradient-to-r from-[#5B4DCC] via-[#F06A8B] to-[#FFD166] transition-all duration-300"
+                            className="h-full rounded-lg bg-brand-purple transition-all duration-300"
                             style={{ width: `${Math.max(0, Math.min(downloadPercent, 100))}%` }}
                           />
                         </div>

@@ -1,6 +1,6 @@
 [package]
 name = "ultra-meet"
-version = "2.1.0"
+version = "2.2.0"
 description = "Ultra — privacy-first AI meeting notes for macOS."
 license = "MIT"
 edition = "2021"

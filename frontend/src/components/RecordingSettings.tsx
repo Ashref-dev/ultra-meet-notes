@@ -29,7 +29,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
     save_folder: '',
     notes_folder: '',
     sync_folders: true,
-    auto_save: true,
+    auto_save: false,
     file_format: 'mp4',
     preferred_mic_device: null,
     preferred_system_device: null,
@@ -39,7 +39,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
   const [saving, setSaving] = useState(false);
   const [selectingRecordingFolder, setSelectingRecordingFolder] = useState(false);
   const [selectingNotesFolder, setSelectingNotesFolder] = useState(false);
-  const [showRecordingNotification, setShowRecordingNotification] = useState(true);
+  const [showRecordingNotification, setShowRecordingNotification] = useState(false);
 
   const effectiveNotesFolder = preferences.sync_folders
     ? preferences.save_folder
@@ -76,7 +76,7 @@ export function RecordingSettings({ onSave }: RecordingSettingsProps) {
       try {
         const { Store } = await import('@tauri-apps/plugin-store');
         const store = await Store.load('preferences.json');
-        const show = (await store.get<boolean>('show_recording_notification')) ?? true;
+        const show = (await store.get<boolean>('show_recording_notification')) ?? false;
         setShowRecordingNotification(show);
       } catch (error) {
         console.error('Failed to load notification preference:', error);

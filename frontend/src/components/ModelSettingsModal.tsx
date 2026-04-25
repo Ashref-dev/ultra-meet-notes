@@ -958,7 +958,7 @@ export function ModelSettingsModal({
                 }
               }}
             >
-              <SelectTrigger className="w-full sm:w-[180px] sm:shrink-0">
+              <SelectTrigger className="w-full sm:min-w-[280px] sm:shrink-0">
                 <SelectValue placeholder="Select provider" />
               </SelectTrigger>
               <SelectContent className="max-h-64 overflow-y-auto">

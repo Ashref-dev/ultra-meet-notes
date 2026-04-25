@@ -19,8 +19,8 @@ import { ConfirmDeleteDialog } from '@/components/shared/ConfirmDeleteDialog';
 import { cn } from '@/lib/utils';
 
 const DOWNLOAD_BUTTON_CLASSNAME =
-  'h-11 rounded-lg bg-gradient-to-r from-[#5B4DCC] to-[#FFD166] px-6 text-white shadow-md transition-all hover:from-[#6A5ACF] hover:to-[#FFE08A] hover:shadow-lg focus-visible:ring-2 focus-visible:ring-[#8A6FD1]/40 disabled:cursor-not-allowed disabled:opacity-60';
-const DOWNLOAD_PROGRESS_CLASSNAME = 'bg-gradient-to-r from-[#5B4DCC] to-[#FFD166]';
+  'h-11 rounded-lg bg-brand-purple px-6 text-white shadow-md transition-all hover:bg-brand-purple/90 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-brand-purple/40 disabled:cursor-not-allowed disabled:opacity-60';
+const DOWNLOAD_PROGRESS_CLASSNAME = 'bg-brand-purple';
 
 const BASIC_MODEL_NAMES = ['small', 'medium-q5_0', 'large-v3-q5_0', 'large-v3-turbo', 'large-v3'];
 
@@ -425,6 +425,7 @@ export function ModelManager({
 
   const basicModels = models.filter(m => BASIC_MODEL_NAMES.includes(m.name))
     .sort((a, b) => BASIC_MODEL_NAMES.indexOf(a.name) - BASIC_MODEL_NAMES.indexOf(b.name));
+  const selectedModelIsReady = models.some((m) => m.name === selectedModel && m.status === 'Available');
   const advancedModels = models.filter(m => !BASIC_MODEL_NAMES.includes(m.name));
 
   return (
@@ -486,14 +487,14 @@ export function ModelManager({
       )}
 
       {/* Helper text */}
-      {selectedModel && (
+      {selectedModelIsReady && (
         <motion.div
           initial={prefersReducedMotion ? false : { opacity: 0, y: -5 }}
           animate={prefersReducedMotion ? false : { opacity: 1, y: 0 }}
           transition={prefersReducedMotion ? { duration: 0 } : undefined}
           className="pt-2 text-center text-xs text-muted-foreground"
         >
-          Using {getDisplayName(selectedModel)} for transcription
+          Using {getDisplayName(selectedModel ?? '')} for transcription
         </motion.div>
       )}
 
@@ -580,7 +581,7 @@ function ModelCard({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h3 className="text-sm font-semibold text-foreground">{displayName}</h3>
             {isRecommended && (
-              <span className="text-[11px] font-medium uppercase tracking-wide text-accent">Recommended</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-brand-purple dark:text-brand-lavender">Recommended</span>
             )}
             {isSelected && isAvailable && (
               <span className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-foreground">

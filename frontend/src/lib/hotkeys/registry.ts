@@ -16,8 +16,8 @@ export type HotkeyAction = (typeof HOTKEY_ACTIONS)[number]['id'];
 export const HOTKEY_OVERRIDES_STORAGE_KEY = 'ultra-meet.hotkey-overrides';
 
 export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
-  tabNotes: 'mod+1',
-  tabTranscript: 'mod+2',
+  tabNotes: 'mod+shift+1',
+  tabTranscript: 'mod+shift+2',
 };
 
 const VALID_ACTION_IDS = new Set<HotkeyAction>(HOTKEY_ACTIONS.map((action) => action.id));

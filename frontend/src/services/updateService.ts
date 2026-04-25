@@ -1,12 +1,9 @@
 /**
  * Update Service
  *
- * Handles automatic software updates using Tauri updater plugin.
- * Provides update checking, downloading, and installation functionality.
+ * Checks for updates by fetching the latest release from GitHub.
  */
 
-import { check, Update } from '@tauri-apps/plugin-updater';
-import { relaunch } from '@tauri-apps/plugin-process';
 import { getVersion } from '@tauri-apps/api/app';
 
 export interface UpdateInfo {
@@ -18,41 +15,22 @@ export interface UpdateInfo {
   downloadUrl?: string;
 }
 
-export interface UpdateProgress {
-  downloaded: number;
-  total: number;
-  percentage: number;
-}
+const GITHUB_REPO = 'Ashref-dev/ultra-meet-notes';
 
-/**
- * Update Service
- * Singleton service for managing app updates
- */
 export class UpdateService {
   private updateCheckInProgress = false;
   private lastCheckTime: number | null = null;
-  private readonly CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+  private readonly CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-  /**
-   * Check for available updates
-   * @param force Force check even if recently checked
-   * @returns Promise with update information
-   */
   async checkForUpdates(force = false): Promise<UpdateInfo> {
-    // Prevent concurrent update checks
     if (this.updateCheckInProgress) {
       throw new Error('Update check already in progress');
     }
 
-    // Skip if checked recently (unless forced)
     if (!force && this.lastCheckTime) {
       const timeSinceLastCheck = Date.now() - this.lastCheckTime;
       if (timeSinceLastCheck < this.CHECK_INTERVAL_MS) {
-        console.log('Skipping update check - checked recently');
-        return {
-          available: false,
-          currentVersion: await getVersion(),
-        };
+        return { available: false, currentVersion: await getVersion() };
       }
     }
 
@@ -61,21 +39,33 @@ export class UpdateService {
 
     try {
       const currentVersion = await getVersion();
-      const update = await check();
 
-      if (update?.available) {
-        return {
-          available: true,
-          currentVersion,
-          version: update.version,
-          date: update.date,
-          body: update.body,
-        };
+      const response = await fetch(
+        `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
+        { headers: { Accept: 'application/vnd.github+json' } }
+      );
+
+      if (!response.ok) {
+        throw new Error(`GitHub API error: ${response.status}`);
       }
 
+      const release = await response.json() as {
+        tag_name: string;
+        published_at: string;
+        body: string;
+        html_url: string;
+      };
+
+      const latestVersion = release.tag_name.replace(/^v/, '');
+      const isNewer = compareVersions(latestVersion, currentVersion) > 0;
+
       return {
-        available: false,
+        available: isNewer,
         currentVersion,
+        version: latestVersion,
+        date: release.published_at,
+        body: release.body,
+        downloadUrl: release.html_url,
       };
     } catch (error) {
       console.error('Failed to check for updates:', error);
@@ -85,52 +75,24 @@ export class UpdateService {
     }
   }
 
-  /**
-   * Download and install the available update
-   * @param update The update object from checkForUpdates
-   * @param onProgress Optional progress callback
-   * @returns Promise that resolves when download completes
-   */
-  async downloadAndInstall(
-    update: Update,
-    onProgress?: (progress: UpdateProgress) => void
-  ): Promise<void> {
-    try {
-      // Download the update
-      await update.download();
-
-      // Notify progress if callback provided
-      if (onProgress) {
-        onProgress({ downloaded: 100, total: 100, percentage: 100 });
-      }
-
-      // Install and relaunch
-      await update.install();
-      await relaunch();
-    } catch (error) {
-      console.error('Failed to download/install update:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get the current app version
-   * @returns Promise with version string
-   */
   async getCurrentVersion(): Promise<string> {
     return getVersion();
   }
 
-  /**
-   * Check if an update check was performed recently
-   * @returns true if checked within the interval
-   */
   wasCheckedRecently(): boolean {
     if (!this.lastCheckTime) return false;
-    const timeSinceLastCheck = Date.now() - this.lastCheckTime;
-    return timeSinceLastCheck < this.CHECK_INTERVAL_MS;
+    return Date.now() - this.lastCheckTime < this.CHECK_INTERVAL_MS;
   }
 }
 
-// Export singleton instance
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
 export const updateService = new UpdateService();

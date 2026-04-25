@@ -17,8 +17,8 @@ import { ConfirmDeleteDialog } from '@/components/shared/ConfirmDeleteDialog';
 import { cn } from '@/lib/utils';
 
 const DOWNLOAD_BUTTON_CLASSNAME =
-  'h-11 rounded-lg bg-gradient-to-r from-[#5B4DCC] to-[#FFD166] px-6 text-white shadow-md transition-all hover:from-[#6A5ACF] hover:to-[#FFE08A] hover:shadow-lg focus-visible:ring-2 focus-visible:ring-[#8A6FD1]/40 disabled:cursor-not-allowed disabled:opacity-60';
-const DOWNLOAD_PROGRESS_CLASSNAME = 'bg-gradient-to-r from-[#5B4DCC] to-[#FFD166]';
+  'h-11 rounded-lg bg-brand-purple px-6 text-white shadow-md transition-all hover:bg-brand-purple/90 hover:shadow-lg focus-visible:ring-2 focus-visible:ring-brand-purple/40 disabled:cursor-not-allowed disabled:opacity-60';
+const DOWNLOAD_PROGRESS_CLASSNAME = 'bg-brand-purple';
 
 interface QwenAsrModelManagerProps {
   selectedModel?: string;
