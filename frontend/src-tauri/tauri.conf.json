@@ -1,7 +1,7 @@
 {
     "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
     "productName": "Ultra Meet",
-    "version": "2.2.0",
+    "version": "2.3.0",
     "identifier": "tn.ashref.ultrameet",
     "build": {
         "frontendDist": "../out",
@@ -68,6 +68,7 @@
                         "notification:allow-is-permission-granted",
                         "updater:default",
                         "process:default",
+                        "global-shortcut:default",
                         {
                             "identifier": "fs:scope",
                             "allow": [

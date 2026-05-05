@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RotateCcw } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 
 import { Button } from '@/components/ui/button';
 import { usePlatform } from '@/hooks/usePlatform';
 import {
   DEFAULT_HOTKEYS,
   HOTKEY_ACTIONS,
+  acceleratorToTauri,
   findConflict,
   loadOverrides,
   parseAccelerator,
@@ -16,6 +18,32 @@ import {
   validateAccelerator,
 } from '@/lib/hotkeys/registry';
 import { cn } from '@/lib/utils';
+import { Store } from '@tauri-apps/plugin-store';
+
+const RECORDING_HOTKEY_STORE_KEY = 'recording_toggle_hotkey';
+
+async function persistRecordingHotkey(accelerator: string | null): Promise<void> {
+  try {
+    const store = await Store.load('preferences.json');
+    if (accelerator) {
+      await store.set(RECORDING_HOTKEY_STORE_KEY, accelerator);
+    } else {
+      await store.delete(RECORDING_HOTKEY_STORE_KEY);
+    }
+    await store.save();
+  } catch (error) {
+    console.error('[ShortcutsEditor] Failed to persist recording hotkey:', error);
+  }
+}
+
+async function syncRecordingHotkeyToBackend(accelerator: string): Promise<void> {
+  try {
+    await invoke('set_recording_hotkey', { accelerator: acceleratorToTauri(accelerator) });
+  } catch (error) {
+    console.error('[ShortcutsEditor] Failed to register recording hotkey with backend:', error);
+    throw error;
+  }
+}
 
 type HotkeyOverrides = Partial<Record<HotkeyAction, string>>;
 type HotkeyErrors = Partial<Record<HotkeyAction, string>>;
@@ -195,7 +223,7 @@ export function ShortcutsEditor() {
       return;
     }
 
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = async (event: KeyboardEvent) => {
       event.preventDefault();
       event.stopPropagation();
 
@@ -238,6 +266,24 @@ export function ShortcutsEditor() {
       }
 
       saveOverride(recording, nextAccelerator);
+
+      const recordedAction = HOTKEY_ACTIONS.find((a) => a.id === recording);
+      if (recordedAction?.scope === 'global') {
+        try {
+          await syncRecordingHotkeyToBackend(nextAccelerator);
+          await persistRecordingHotkey(nextAccelerator);
+        } catch (error) {
+          setError(
+            recording,
+            error instanceof Error
+              ? `Couldn't register globally: ${error.message}`
+              : "That shortcut couldn't be registered with the system.",
+          );
+          saveOverride(recording, null);
+          return;
+        }
+      }
+
       clearError(recording);
       setRecording(null);
       setPreview(null);
@@ -273,6 +319,7 @@ export function ShortcutsEditor() {
           const hasOverride = Boolean(overrides[action.id]);
           const accelerator = isRecording && preview ? preview : effectiveAccelerators[action.id];
           const tokens = accelerator ? getAcceleratorTokenKeys(formatAccelerator(accelerator)) : [];
+          const isGlobal = action.scope === 'global';
 
           return (
             <div
@@ -286,6 +333,11 @@ export function ShortcutsEditor() {
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h4 className="text-sm font-semibold text-foreground">{action.label}</h4>
+                    {isGlobal ? (
+                      <span className="rounded-lg border border-accent/30 bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
+                        System-wide
+                      </span>
+                    ) : null}
                     {hasOverride ? (
                       <span className="rounded-lg border border-border bg-muted/80 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                         Custom
@@ -335,9 +387,23 @@ export function ShortcutsEditor() {
                       type="button"
                       variant="ghost"
                       disabled={!hasOverride}
-                      onClick={() => {
+                      onClick={async () => {
                         saveOverride(action.id, null);
                         clearError(action.id);
+
+                        if (action.scope === 'global') {
+                          try {
+                            await syncRecordingHotkeyToBackend(DEFAULT_HOTKEYS[action.id]);
+                            await persistRecordingHotkey(null);
+                          } catch (error) {
+                            setError(
+                              action.id,
+                              error instanceof Error
+                                ? `Couldn't restore default: ${error.message}`
+                                : "Couldn't restore the default shortcut.",
+                            );
+                          }
+                        }
 
                         if (recording === action.id) {
                           setRecording(null);

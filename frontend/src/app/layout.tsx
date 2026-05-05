@@ -21,6 +21,8 @@ import { OnboardingFlow } from '@/components/onboarding'
 import { DownloadProgressToastProvider } from '@/components/shared/DownloadProgressToast'
 import { UpdateCheckProvider } from '@/components/UpdateCheckProvider'
 import { RecordingPostProcessingProvider } from '@/contexts/RecordingPostProcessingProvider'
+import { RecordingShortcutBridge } from '@/contexts/RecordingShortcutBridge'
+import { acceleratorToTauri, DEFAULT_HOTKEYS, loadOverrides } from '@/lib/hotkeys/registry'
 import { usePathname } from 'next/navigation'
 import { ImportAudioDialog, ImportDropOverlay } from '@/components/ImportAudio'
 import { ImportDialogProvider } from '@/contexts/ImportDialogContext'
@@ -173,24 +175,43 @@ export default function RootLayout({
       return () => document.removeEventListener('contextmenu', handleContextMenu);
     }
   }, []);
+  // Sync the user's persisted global recording hotkey with the Rust backend on
+  // startup. The Rust side already registers a default at boot, so this only
+  // applies the user's customization (or no-op if they kept the default).
   useEffect(() => {
-    // Listen for tray recording toggle request
-    const unlisten = listen('request-recording-toggle', () => {
-      console.log('[Layout] Received request-recording-toggle from tray');
+    if (isOverlayWindow) return;
 
-      if (showOnboarding) {
-        toast.error("Please complete setup first", {
-          description: "You need to finish onboarding before you can start recording."
+    const syncRecordingHotkey = async () => {
+      try {
+        const { Store } = await import('@tauri-apps/plugin-store');
+        const store = await Store.load('preferences.json');
+        const overrides = loadOverrides();
+        const persisted = await store.get<string>('recording_toggle_hotkey');
+        const accelerator =
+          overrides.recordingToggle ?? persisted ?? DEFAULT_HOTKEYS.recordingToggle;
+
+        await invoke('set_recording_hotkey', {
+          accelerator: acceleratorToTauri(accelerator),
         });
-      } else {
-        // If in main app, forward to useRecordingStart via window event
-        console.log('[Layout] Forwarding to start-recording-from-sidebar');
-        window.dispatchEvent(new CustomEvent('start-recording-from-sidebar'));
+      } catch (error) {
+        console.error('[Layout] Failed to sync recording hotkey:', error);
       }
-    });
+    };
 
+    void syncRecordingHotkey();
+  }, [isOverlayWindow]);
+
+  // Block recording requests during onboarding so partially configured
+  // workspaces don't accidentally start recordings via tray/hotkey.
+  useEffect(() => {
+    if (!showOnboarding) return;
+    const unlisten = listen('request-recording-start', () => {
+      toast.error('Please complete setup first', {
+        description: 'You need to finish onboarding before you can start recording.',
+      });
+    });
     return () => {
-      unlisten.then(fn => fn());
+      unlisten.then((fn) => fn());
     };
   }, [showOnboarding]);
 
@@ -345,6 +366,7 @@ export default function RootLayout({
                       <SidebarProvider>
                         <TooltipProvider>
                           <RecordingPostProcessingProvider>
+                            <RecordingShortcutBridge />
                             <ImportDialogProvider onOpen={handleOpenImportDialog}>
                               {/* Download progress toast provider - listens for background downloads */}
                               <DownloadProgressToastProvider />

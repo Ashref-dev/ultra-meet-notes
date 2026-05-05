@@ -98,15 +98,22 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, item_id: &str) {
         _ => {}
     }
 }
-fn toggle_recording_handler<R: Runtime>(app: &AppHandle<R>) {
-    focus_main_window(app);
+
+/// Public toggle handler — invoked from the tray menu AND from the global hotkey.
+///
+/// Stealth contract: this handler MUST NEVER focus, show, unminimize, or navigate
+/// the main window. It either stops recording in Rust (and emits
+/// `recording-stop-complete` so the frontend can post-process from any page) or
+/// emits `request-recording-start` for the global frontend bridge to pick up
+/// (which can start recording from any page without revealing the UI).
+pub fn toggle_recording_handler<R: Runtime>(app: &AppHandle<R>) {
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
         if crate::is_recording().await {
             // Immediately show stopping state
             set_tray_state(&app_clone, RecordingState::Stopping);
 
-            log::info!("Tray toggle: Stopping recording...");
+            log::info!("Tray toggle: Stopping recording silently...");
 
             // Generate save path (same as RecordingControls.tsx)
             let data_dir = match app_clone.path().app_data_dir() {
@@ -151,10 +158,13 @@ fn toggle_recording_handler<R: Runtime>(app: &AppHandle<R>) {
             // Immediately show starting state
             set_tray_state(&app_clone, RecordingState::Starting);
 
-            log::info!("Emitting start recording event from tray");
-            if let Some(window) = app_clone.get_webview_window("main") {
-                let _ = window.eval("sessionStorage.setItem('autoStartRecording', 'true')"); // Set the flag to start recording automatically
-                let _ = window.eval("window.location.assign('/')");
+            log::info!("Tray toggle: Emitting request-recording-start (silent)");
+            // Emit a Tauri event the frontend bridge listens for from any page.
+            // Critically: do NOT navigate, focus, show, or unminimize the window.
+            if let Err(e) = app_clone.emit("request-recording-start", ()) {
+                log::error!("Tray toggle: Failed to emit request-recording-start event: {}", e);
+                // Revert tray state on error
+                update_tray_menu_async(&app_clone).await;
             }
         }
     });

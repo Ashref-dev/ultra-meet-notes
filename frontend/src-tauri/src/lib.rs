@@ -74,6 +74,13 @@ static GHOST_MODE: AtomicBool = AtomicBool::new(false);
 static LANGUAGE_PREFERENCE: std::sync::LazyLock<StdMutex<String>> =
     std::sync::LazyLock::new(|| StdMutex::new("auto-translate".to_string()));
 
+// Tauri global-shortcut accelerator format: modifier names "Cmd|Ctrl|Alt|Shift",
+// letter codes "KeyA..KeyZ", digit codes "Digit0..Digit9". Empty = unregistered.
+static RECORDING_HOTKEY: std::sync::LazyLock<StdMutex<String>> =
+    std::sync::LazyLock::new(|| StdMutex::new(String::new()));
+
+pub const DEFAULT_RECORDING_HOTKEY: &str = "Cmd+Alt+Ctrl+Shift+KeyR";
+
 #[derive(Debug, Deserialize)]
 struct RecordingArgs {
     save_path: String,
@@ -408,6 +415,74 @@ async fn start_recording_with_devices_and_meeting<R: Runtime>(
     }
 }
 
+fn unregister_recording_hotkey<R: Runtime>(app: &AppHandle<R>) {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    let mut current = match RECORDING_HOTKEY.lock() {
+        Ok(g) => g,
+        Err(_) => return,
+    };
+    if current.is_empty() {
+        return;
+    }
+    let prev = current.clone();
+    if let Err(e) = app.global_shortcut().unregister(prev.as_str()) {
+        log_error!("Failed to unregister previous recording hotkey '{}': {}", prev, e);
+    } else {
+        log_info!("Unregistered previous recording hotkey: {}", prev);
+    }
+    current.clear();
+}
+
+fn register_recording_hotkey<R: Runtime>(
+    app: &AppHandle<R>,
+    accelerator: &str,
+) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    unregister_recording_hotkey(app);
+
+    let trimmed = accelerator.trim();
+    if trimmed.is_empty() {
+        return Ok(());
+    }
+
+    app.global_shortcut()
+        .register(trimmed)
+        .map_err(|e| format!("Failed to register hotkey '{}': {}", trimmed, e))?;
+
+    if let Ok(mut current) = RECORDING_HOTKEY.lock() {
+        *current = trimmed.to_string();
+    }
+    log_info!("Registered recording hotkey: {}", trimmed);
+    Ok(())
+}
+
+#[tauri::command]
+async fn set_recording_hotkey<R: Runtime>(
+    app: AppHandle<R>,
+    accelerator: String,
+) -> Result<(), String> {
+    register_recording_hotkey(&app, accelerator.as_str())
+}
+
+#[tauri::command]
+async fn clear_recording_hotkey<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
+    unregister_recording_hotkey(&app);
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_recording_hotkey() -> String {
+    RECORDING_HOTKEY
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+async fn get_default_recording_hotkey() -> String {
+    DEFAULT_RECORDING_HOTKEY.to_string()
+}
+
 #[tauri::command]
 async fn set_language_preference(language: String) -> Result<(), String> {
     let mut lang_pref = LANGUAGE_PREFERENCE
@@ -426,12 +501,35 @@ pub fn get_language_preference_internal() -> Option<String> {
 pub fn run() {
     log::set_max_level(log::LevelFilter::Info);
 
+    use tauri::Emitter;
+    use tauri_plugin_global_shortcut::{Builder as GlobalShortcutBuilder, ShortcutState};
+
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(
+            GlobalShortcutBuilder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state() == ShortcutState::Pressed {
+                        let registered = RECORDING_HOTKEY
+                            .lock()
+                            .map(|g| g.clone())
+                            .unwrap_or_default();
+                        if registered.is_empty() {
+                            return;
+                        }
+                        log_info!("Global hotkey pressed: {}", registered);
+                        if let Err(e) = app.emit("recording-hotkey-fired", ()) {
+                            log_error!("Failed to emit recording-hotkey-fired: {}", e);
+                        }
+                        tray::toggle_recording_handler(app);
+                    }
+                })
+                .build(),
+        )
         .manage(whisper_engine::parallel_commands::ParallelProcessorState::new())
         .manage(Arc::new(RwLock::new(
             None::<notifications::manager::NotificationManager<tauri::Wry>>,
@@ -446,6 +544,14 @@ pub fn run() {
             // Initialize system tray
             if let Err(e) = tray::create_tray(_app.handle()) {
                 log::error!("Failed to create system tray: {}", e);
+            }
+
+            // Register default global recording hotkey. Frontend may overwrite
+            // this on startup with the user's persisted choice via
+            // set_recording_hotkey, but this guarantees a working default
+            // even if the frontend bridge fails to load.
+            if let Err(e) = register_recording_hotkey(_app.handle(), DEFAULT_RECORDING_HOTKEY) {
+                log::warn!("Failed to register default recording hotkey: {}", e);
             }
 
             // Dictation hotkey listener intentionally disabled.
@@ -735,6 +841,11 @@ pub fn run() {
             meeting_app_detector::disable_meeting_app_detection,
             // Language preference commands
             set_language_preference,
+            // Global recording hotkey commands
+            set_recording_hotkey,
+            clear_recording_hotkey,
+            get_recording_hotkey,
+            get_default_recording_hotkey,
             // Meeting detection commands
             meeting_detector::set_meeting_detection_enabled,
             meeting_detector::get_meeting_detection_enabled,

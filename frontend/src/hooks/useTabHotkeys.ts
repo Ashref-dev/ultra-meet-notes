@@ -12,6 +12,7 @@ function getBindings(resolveHotkey: ResolveHotkey): HotkeyBindings {
   return {
     tabNotes: resolveHotkey('tabNotes'),
     tabTranscript: resolveHotkey('tabTranscript'),
+    recordingToggle: resolveHotkey('recordingToggle'),
   };
 }
 

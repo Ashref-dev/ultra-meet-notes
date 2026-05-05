@@ -1,13 +1,24 @@
+export type HotkeyScope = 'in-app' | 'global';
+
 export const HOTKEY_ACTIONS = [
   {
     id: 'tabNotes',
     label: 'Open notes tab',
     description: 'Jump to the Notes tab from meeting and editor screens.',
+    scope: 'in-app',
   },
   {
     id: 'tabTranscript',
     label: 'Open transcript tab',
     description: 'Jump to the Transcript tab without reaching for the mouse.',
+    scope: 'in-app',
+  },
+  {
+    id: 'recordingToggle',
+    label: 'Start / stop recording',
+    description:
+      'Toggle a recording from anywhere on the system. The window stays hidden — recording silently starts or stops in the background.',
+    scope: 'global',
   },
 ] as const;
 
@@ -18,6 +29,7 @@ export const HOTKEY_OVERRIDES_STORAGE_KEY = 'ultra-meet.hotkey-overrides';
 export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
   tabNotes: 'mod+shift+1',
   tabTranscript: 'mod+shift+2',
+  recordingToggle: 'meta+ctrl+alt+shift+r',
 };
 
 const VALID_ACTION_IDS = new Set<HotkeyAction>(HOTKEY_ACTIONS.map((action) => action.id));
@@ -248,6 +260,76 @@ export function findConflict(
   }
 
   return null;
+}
+
+/**
+ * Convert our internal accelerator (e.g. "meta+ctrl+alt+shift+r") to the
+ * format Tauri's global-shortcut plugin expects (e.g. "Cmd+Ctrl+Alt+Shift+KeyR").
+ *
+ * Tauri uses W3C UI Events code values for the non-modifier key:
+ *   "a"-"z" → "KeyA"-"KeyZ", "0"-"9" → "Digit0"-"Digit9".
+ * Special keys ("space", "enter", "escape", arrow keys, …) map to their
+ * matching UI Events code names.
+ *
+ * `mod` is platform-aware: on macOS it maps to Cmd, elsewhere to Ctrl.
+ */
+export function acceleratorToTauri(accel: string): string {
+  const parsed = parseAccelerator(accel);
+  const isMac = isMacPlatform();
+  const parts: string[] = [];
+
+  if (parsed.mod) parts.push(isMac ? 'Cmd' : 'Ctrl');
+  if (parsed.meta) parts.push('Cmd');
+  if (parsed.ctrl) parts.push('Ctrl');
+  if (parsed.alt) parts.push('Alt');
+  if (parsed.shift) parts.push('Shift');
+
+  const key = parsed.key;
+  if (key) {
+    parts.push(keyToTauriCode(key));
+  }
+
+  return parts.join('+');
+}
+
+function keyToTauriCode(key: string): string {
+  if (/^[a-z]$/.test(key)) return `Key${key.toUpperCase()}`;
+  if (/^[0-9]$/.test(key)) return `Digit${key}`;
+
+  const namedKey: Record<string, string> = {
+    space: 'Space',
+    enter: 'Enter',
+    escape: 'Escape',
+    tab: 'Tab',
+    backspace: 'Backspace',
+    delete: 'Delete',
+    arrowup: 'ArrowUp',
+    arrowdown: 'ArrowDown',
+    arrowleft: 'ArrowLeft',
+    arrowright: 'ArrowRight',
+    home: 'Home',
+    end: 'End',
+    pageup: 'PageUp',
+    pagedown: 'PageDown',
+    minus: 'Minus',
+    equal: 'Equal',
+    comma: 'Comma',
+    period: 'Period',
+    slash: 'Slash',
+    backslash: 'Backslash',
+    semicolon: 'Semicolon',
+    quote: 'Quote',
+    backquote: 'Backquote',
+    bracketleft: 'BracketLeft',
+    bracketright: 'BracketRight',
+  };
+
+  if (namedKey[key]) return namedKey[key];
+  if (/^f([1-9]|1[0-9]|2[0-4])$/.test(key)) {
+    return `F${key.slice(1)}`;
+  }
+
+  return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
 export function matchesEvent(accel: string, event: KeyboardEvent): boolean {
