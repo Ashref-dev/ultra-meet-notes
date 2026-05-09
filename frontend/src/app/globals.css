@@ -329,12 +329,21 @@
     overflow: visible !important;
   }
 
-  .blocknote-font-size-wrapper,
+  /* IMPORTANT: do NOT include the wrapper itself here — its inline
+     `style={{ fontSize }}` would be overridden by `!important` and the
+     font-size buttons/slider would silently do nothing. We only force
+     descendants to inherit so the chosen size cascades through BlockNote. */
   .blocknote-font-size-wrapper .bn-container,
   .blocknote-font-size-wrapper .bn-editor,
   .blocknote-font-size-wrapper .bn-default-styles,
   .blocknote-font-size-wrapper .ProseMirror {
     font-size: inherit !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .blocknote-font-size-wrapper {
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0 !important;
@@ -391,6 +400,95 @@
   /* Disable scrolling on any BlockNote wrapper elements */
   [data-node-type] {
     overflow: visible !important;
+  }
+}
+
+.font-size-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 20px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.font-size-slider:focus {
+  outline: none;
+}
+
+.font-size-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    rgb(91 77 204 / 0.85) 0%,
+    rgb(255 209 102 / 0.85) var(--font-size-progress, 50%),
+    hsl(var(--border)) var(--font-size-progress, 50%),
+    hsl(var(--border)) 100%
+  );
+}
+
+.font-size-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: hsl(var(--border));
+}
+
+.font-size-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(to right, rgb(91 77 204 / 0.85), rgb(255 209 102 / 0.85));
+}
+
+.font-size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: hsl(var(--background));
+  border: 2px solid rgb(91 77 204);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18), 0 1px 2px rgb(0 0 0 / 0.12);
+  margin-top: -6px;
+  transition: transform 120ms ease-out, box-shadow 120ms ease-out, border-color 120ms ease-out;
+}
+
+.font-size-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: hsl(var(--background));
+  border: 2px solid rgb(91 77 204);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18), 0 1px 2px rgb(0 0 0 / 0.12);
+  transition: transform 120ms ease-out, box-shadow 120ms ease-out, border-color 120ms ease-out;
+}
+
+.font-size-slider:hover::-webkit-slider-thumb,
+.font-size-slider:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 6px rgb(91 77 204 / 0.12), 0 1px 3px rgb(0 0 0 / 0.18);
+}
+
+.font-size-slider:hover::-moz-range-thumb,
+.font-size-slider:focus-visible::-moz-range-thumb {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 6px rgb(91 77 204 / 0.12), 0 1px 3px rgb(0 0 0 / 0.18);
+}
+
+.font-size-slider:active::-webkit-slider-thumb {
+  transform: scale(1.05);
+}
+
+.font-size-slider:active::-moz-range-thumb {
+  transform: scale(1.05);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .font-size-slider::-webkit-slider-thumb,
+  .font-size-slider::-moz-range-thumb {
+    transition: none !important;
   }
 }
 

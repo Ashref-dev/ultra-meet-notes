@@ -2,7 +2,7 @@
 
 ![Ultra — Privacy-first AI meeting notes](cover.jpg)
 
-Privacy-first AI meeting notes for macOS. Records meetings, transcribes them locally, labels speakers on device, and generates AI notes — all on your machine.
+Privacy-first AI meeting notes for macOS. Records meetings, transcribes them locally with Whisper, and generates AI notes — all on your machine.
 
 Website: [ultra.ashref.tn](https://ultra.ashref.tn)
 
@@ -12,7 +12,6 @@ Website: [ultra.ashref.tn](https://ultra.ashref.tn)
 
 - **Records meetings** from your microphone and system audio simultaneously with automatic ducking.
 - **Transcribes in real time** with local Whisper, Parakeet, or Qwen3 ASR models — raw audio never leaves your machine.
-- **Labels speakers automatically** after each recording with on-device pyannote + WeSpeaker ONNX diarization.
 - **Summarizes with AI** using your choice of provider: local Ollama, OpenAI, Claude, Groq, OpenRouter, or any OpenAI-compatible endpoint.
 - **Searches across all meetings** with full-text transcript indexing.
 - **Imports existing audio** in MP3, WAV, FLAC, OGG, MP4, MKV, WebM, or WMA format.
@@ -25,7 +24,7 @@ Website: [ultra.ashref.tn](https://ultra.ashref.tn)
 Ultra is built on the principle that meeting data is sensitive and should stay on your device.
 
 - Audio and transcripts never touch a third-party server (unless you explicitly choose a cloud AI provider for summaries).
-- Transcription and diarization run on device with Metal GPU acceleration on Apple Silicon.
+- Transcription runs on device with Metal GPU acceleration on Apple Silicon.
 - No telemetry. No analytics. No login. No account required.
 - Recordings live in `~/Movies/ultra-meet-recordings/` by default. The database lives under `~/Library/Application Support/tn.ashref.ultrameet/`.
 
@@ -81,7 +80,7 @@ Ultra is a single Tauri 2 application with a Rust backend and a Next.js 14 front
 ```
 frontend/
   src/                Next.js UI (React 18, Tailwind, BlockNote editor)
-  src-tauri/          Rust backend (audio capture, Whisper FFI, Pyannote, storage)
+  src-tauri/          Rust backend (audio capture, Whisper FFI, storage)
   whisper-server-package/
                       Prebuilt Whisper binary used by the Rust audio pipeline
   public/             Static assets
@@ -89,7 +88,6 @@ frontend/
 
 - **Audio capture**: CoreAudio tap on macOS for system audio, plus AVAudioEngine for microphone input. Mixed in Rust with clipping prevention.
 - **Transcription**: `whisper-rs` with Metal acceleration. Streaming transcripts delivered through Tauri events.
-- **Diarization**: ONNX Pyannote embedding model, clustered in process.
 - **Summarization**: Pluggable provider abstraction in `src-tauri/src/summary/`. Each provider implements a common `Summarizer` trait.
 
 ---
@@ -130,6 +128,15 @@ MIT. See [`LICENSE.md`](LICENSE.md).
 ---
 
 ## Changelog
+
+### v2.4.1
+- Fixed broken text-size buttons on the meeting notes view (inline `style` was being overridden by `!important` inheritance, so every size rendered at 16 px)
+- Replaced the Small/Normal/Large/XL segmented control with a debounced macOS-style range slider (12–22 px, live preview, double-click to reset, full a11y)
+- Backwards-compatible: existing stored named sizes are migrated to pixel values on first load
+
+### v2.4.0
+- Silent tray recording controls and customizable global record hotkey
+- Removed unused diarization stack — slimmer install, faster startup
 
 ### v2.1.0
 - Brand consistency polish: replaced system blue accent with brand purple across all UI primitives

@@ -38,33 +38,37 @@ export interface BlockNoteSummaryViewRef {
 
 const EDITOR_FONT_SIZE_STORAGE_KEY = 'editor-font-size';
 
-const FONT_SIZE_OPTIONS = [
-  { value: 'small', label: 'Small', fontSize: '14px' },
-  { value: 'normal', label: 'Normal', fontSize: '16px' },
-  { value: 'large', label: 'Large', fontSize: '18px' },
-  { value: 'x-large', label: 'XL', fontSize: '20px' },
-] as const;
+const FONT_SIZE_MIN = 12;
+const FONT_SIZE_MAX = 22;
+const FONT_SIZE_DEFAULT = 16;
+const FONT_SIZE_PERSIST_DEBOUNCE_MS = 250;
 
-type EditorFontSize = (typeof FONT_SIZE_OPTIONS)[number]['value'];
+const LEGACY_NAMED_SIZE_TO_PX: Record<string, number> = {
+  small: 14,
+  normal: 16,
+  large: 18,
+  'x-large': 20,
+};
 
-const DEFAULT_FONT_SIZE: EditorFontSize = 'normal';
-
-const fontSizeMap: Record<EditorFontSize, string> = FONT_SIZE_OPTIONS.reduce((acc, option) => {
-  acc[option.value] = option.fontSize;
-  return acc;
-}, {} as Record<EditorFontSize, string>);
-
-function isEditorFontSize(value: string): value is EditorFontSize {
-  return FONT_SIZE_OPTIONS.some((option) => option.value === value);
+function clampFontSize(value: number): number {
+  if (Number.isNaN(value)) return FONT_SIZE_DEFAULT;
+  return Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, Math.round(value)));
 }
 
-function getStoredEditorFontSize(): EditorFontSize {
+function getStoredEditorFontSize(): number {
   if (typeof window === 'undefined') {
-    return DEFAULT_FONT_SIZE;
+    return FONT_SIZE_DEFAULT;
   }
 
-  const storedValue = window.localStorage.getItem(EDITOR_FONT_SIZE_STORAGE_KEY);
-  return storedValue && isEditorFontSize(storedValue) ? storedValue : DEFAULT_FONT_SIZE;
+  const stored = window.localStorage.getItem(EDITOR_FONT_SIZE_STORAGE_KEY);
+  if (!stored) return FONT_SIZE_DEFAULT;
+
+  if (stored in LEGACY_NAMED_SIZE_TO_PX) {
+    return LEGACY_NAMED_SIZE_TO_PX[stored];
+  }
+
+  const parsed = Number.parseInt(stored, 10);
+  return Number.isFinite(parsed) ? clampFontSize(parsed) : FONT_SIZE_DEFAULT;
 }
 
 // Format detection helper
@@ -113,7 +117,8 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
   const blockNoteTheme: 'light' | 'dark' = resolvedTheme === 'dark' ? 'dark' : 'light';
   const [isDirty, setIsDirty] = useState(false);
   const [currentBlocks, setCurrentBlocks] = useState<Block[]>([]);
-  const [fontSize, setFontSize] = useState<EditorFontSize>(DEFAULT_FONT_SIZE);
+  const [fontSize, setFontSize] = useState<number>(FONT_SIZE_DEFAULT);
+  const persistTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isContentLoaded = useRef(false);
 
   // Create BlockNote editor for markdown parsing
@@ -194,47 +199,88 @@ export const BlockNoteSummaryView = forwardRef<BlockNoteSummaryViewRef, BlockNot
     }
   }, [onSave, isDirty, currentBlocks, editor]);
 
-  const handleFontSizeChange = useCallback((size: EditorFontSize) => {
-    setFontSize(size);
-
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(EDITOR_FONT_SIZE_STORAGE_KEY, size);
-    }
+  useEffect(() => {
+    return () => {
+      if (persistTimeoutRef.current) {
+        clearTimeout(persistTimeoutRef.current);
+      }
+    };
   }, []);
 
-  const renderFontSizeControls = () => (
-    <div className="mb-3 flex items-center justify-end gap-2">
-      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-        Size
-      </span>
-      <div className="inline-flex items-center gap-0.5 rounded-lg border border-border/60 bg-card/60 p-0.5 shadow-sm backdrop-blur-sm">
-        {FONT_SIZE_OPTIONS.map((option) => {
-          const isActive = fontSize === option.value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              aria-pressed={isActive}
-              onClick={() => handleFontSizeChange(option.value)}
-              aria-label={`Set editor font size to ${option.label === 'XL' ? 'Extra Large' : option.label}`}
-              className={cn(
-                'relative rounded-lg px-3 py-1 text-xs font-medium transition-all duration-200 ease-out',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
-                'motion-reduce:transition-none motion-safe:active:scale-[0.97]',
-                isActive
-                  ? 'bg-gradient-to-r from-[#5B4DCC] to-[#FFD166] text-white shadow-sm'
-                  : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
-              )}
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
+  const handleFontSizeChange = useCallback((nextValue: number) => {
+    const clamped = clampFontSize(nextValue);
+    setFontSize(clamped);
 
-  const editorFontSize = fontSizeMap[fontSize];
+    if (typeof window === 'undefined') return;
+
+    if (persistTimeoutRef.current) {
+      clearTimeout(persistTimeoutRef.current);
+    }
+    persistTimeoutRef.current = setTimeout(() => {
+      window.localStorage.setItem(EDITOR_FONT_SIZE_STORAGE_KEY, String(clamped));
+      persistTimeoutRef.current = null;
+    }, FONT_SIZE_PERSIST_DEBOUNCE_MS);
+  }, []);
+
+  const handleFontSizeReset = useCallback(() => {
+    handleFontSizeChange(FONT_SIZE_DEFAULT);
+  }, [handleFontSizeChange]);
+
+  const renderFontSizeControls = () => {
+    const progress = ((fontSize - FONT_SIZE_MIN) / (FONT_SIZE_MAX - FONT_SIZE_MIN)) * 100;
+    const isDefault = fontSize === FONT_SIZE_DEFAULT;
+
+    return (
+      <div className="mb-3 flex items-center justify-end gap-3">
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          Text size
+        </span>
+        <div className="group inline-flex items-center gap-3 rounded-full border border-border/60 bg-card/60 px-3 py-1.5 shadow-sm backdrop-blur-sm transition-colors hover:border-border">
+          <span
+            aria-hidden="true"
+            className="select-none font-semibold leading-none text-muted-foreground"
+            style={{ fontSize: '11px' }}
+          >
+            A
+          </span>
+          <input
+            type="range"
+            min={FONT_SIZE_MIN}
+            max={FONT_SIZE_MAX}
+            step={1}
+            value={fontSize}
+            onChange={(event) => handleFontSizeChange(Number(event.target.value))}
+            onDoubleClick={handleFontSizeReset}
+            aria-label="Editor text size"
+            aria-valuemin={FONT_SIZE_MIN}
+            aria-valuemax={FONT_SIZE_MAX}
+            aria-valuenow={fontSize}
+            aria-valuetext={`${fontSize} pixels`}
+            title={`${fontSize}px (double-click to reset)`}
+            className="font-size-slider w-32 sm:w-40"
+            style={{ ['--font-size-progress' as string]: `${progress}%` }}
+          />
+          <span
+            aria-hidden="true"
+            className="select-none font-semibold leading-none text-muted-foreground"
+            style={{ fontSize: '17px' }}
+          >
+            A
+          </span>
+          <span
+            className={cn(
+              'min-w-[3ch] text-right text-[11px] font-medium tabular-nums tracking-tight transition-colors',
+              isDefault ? 'text-muted-foreground' : 'text-foreground'
+            )}
+          >
+            {fontSize}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
+  const editorFontSize = `${fontSize}px`;
 
   // Expose methods to parent via ref
   useImperativeHandle(ref, () => ({
