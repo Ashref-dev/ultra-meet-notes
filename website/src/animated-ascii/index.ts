@@ -1,0 +1,5 @@
+export { AnimatedAscii } from './AnimatedAscii'
+export type { AnimatedAsciiHandle, AnimatedAsciiProps } from './AnimatedAscii'
+export { AsciiRenderer } from './AsciiRenderer'
+export { ANIM_PRESETS, DEFAULT_OPTIONS } from './options'
+export type { AnimPreset, AsciiOptions, AsciiSource, BackgroundMode, FitMode } from './options'
