@@ -1,6 +1,6 @@
 # Ultra
 
-![Ultra — Privacy-first AI meeting notes](cover.jpg)
+![Ultra — Privacy-first AI meeting notes](banner.webp)
 
 Privacy-first AI meeting notes for macOS. Records meetings, transcribes them locally with Whisper, and generates AI notes — all on your machine.
 
